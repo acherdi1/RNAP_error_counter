@@ -11,8 +11,7 @@ line_nr = 0
 for line in sys.stdin:
 	line_nr += 1
 	line = line.strip().split() #"\t"
-	if (line[2]!="chrM" and line[4]=="255" and 
-		line[-2]!="CB:Z:-" and line[-1]!="UB:Z:-"):
+    if (line[-2]!="CB:Z:-" and line[-1]!="UB:Z:-" and line[4]=="255" and line[2]!="chrM" and int(line[1])<256):
 		bc_umi = ' '.join([line[-2][5::], line[-1][5::]])
 		if bc_umi not in out:
 			continue
