@@ -224,5 +224,5 @@ def main():
 			errorRate=len_cov_err/len_cov
 
 			record_substitutions(address_subs, bc)
-			record_errorrate(address_er, bc, errorRate)
+			record_errorrate(address_er, bc, errorRate, len_cov_err, len_cov)
 main()

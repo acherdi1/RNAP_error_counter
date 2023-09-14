@@ -3,6 +3,7 @@ from collections import defaultdict
 th = int(sys.argv[1])
 
 filt_bcs=sys.argv[2]
+
 filt_bcs_d=dict()
 with open(filt_bcs) as f:
 	for line in f.readlines():
@@ -15,7 +16,7 @@ out = defaultdict(lambda: defaultdict(lambda: 0)) #, tuple()
 
 for line in sys.stdin:
 	line = line.strip().split() #"\t"
-    if (line[-2]!="CB:Z:-" and line[-1]!="UB:Z:-" and line[4]=="255" and line[2]!="chrM" and int(line[1])<256):
+	if (line[-2]!="CB:Z:-" and line[-1]!="UB:Z:-" and line[4]=="255" and line[2]!="chrM" and int(line[1])<256):
 		bc = line[-2][5::] 
 		#print(chrom_old, chrom, end=' ')
 		if bc in filt_bcs_d:

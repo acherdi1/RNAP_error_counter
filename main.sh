@@ -19,8 +19,10 @@ stage=$3
 
 ### not to change 
 workdir='/cellfile/datapublic/acherdi1/rnaspeed/'
+gitdir="$workdir/RNAP_error_counter/"
 out="${dataset}/res/${sample}/"
 bam="${out}/Aligned.sortedByCoord.out.bam"
+bc_filtd="${out}/Solo.out/GeneFull/filtered/barcodes.tsv"
 th_dup=5
 th_cov=5
 gene_info='genes.gex_mm10_2020_A'
@@ -48,8 +50,10 @@ date
 
 echo """
 workdir=$workdir
+gitdir=$gitdir
 dataset=$dataset
 sample=$sample
+stage=$stage
 out=$out
 
 """
@@ -58,7 +62,7 @@ cd $workdir
 mkdir -p $out
 
 
-if (( $stage > 0 )) #star.sh 
+if (( $stage < 2 )) #star.sh 
 then 
 	echo "Running STAR:"
 
@@ -86,16 +90,26 @@ then
 	date; echo "STAR finished."
 fi
 
-if (( $stage > 1 ))
-then 
+if (( $stage < 3 ))
+then
+	echo "Reads subsetting:"
+	echo """
+	bam=$bam
+	bc_filtd=$bc_filtd
+	th_dup=$th_dup
+	th_cov=$th_cov
+	gene_info=$gene_info
+	
+	""" 
+	
 	echo "Extraction of cell barcodes and UMIs present in BAM file more than $th_dup times:"; date
 	samtools view $bam |
-	/usr/bin/time -v python3 bcumi_mt_th.py $th_dup > ${out}/bcumis_mt_th.txt
+	/usr/bin/time -v python3 $gitdir/bcumi_mt_th.py $th_dup $bc_filtd > ${out}/bcumis_mt_th.txt
 	date; echo "Barcodes and UMIs are extracted."
 
 	echo "Line numbers extraction:"; date
 	samtools view $bam |
-	/usr/bin/time -v python3 line_nrs.py ${out}/bcumis_mt_th.txt > ${out}/line_nrs.txt
+	/usr/bin/time -v python3 $gitdir/line_nrs.py ${out}/bcumis_mt_th.txt > ${out}/line_nrs.txt
 	date; echo "Line numbers are extracted."
 
 	echo "Lines extraction:"; date
@@ -110,19 +124,19 @@ then
 	date; echo "Lines are extracted."
 
 	echo "Extraction of UMIs covering at least 1NT equal or more than $th_dup times:"; date
-	/usr/bin/time -v python3 er.p1.fin.py $out/
+	/usr/bin/time -v python3 $gitdir/er.p1.fin.py $out/
 	date; echo "Barcodes and UMIs are extracted."
 fi
 
 
-if (( $stage > 2 ))
+if (( $stage < 4 ))
 then 
 	echo "Calculating RNA Pol 2 error rate:"; date
-	/usr/bin/time -v python3 er.p2.fin.py $out/
+	/usr/bin/time -v python3 $gitdir/er.p2.fin.py $out/
 	date; echo "Error rate is calculated."
 fi
 
-if (( $stage > 3 ))
+if (( $stage < 5 ))
 then 
 	echo "Introducing gene information:"
 
@@ -132,16 +146,16 @@ then
 	date; echo "Edited (subs3.txt)."
 
 	echo "Adding gene info to subs3.txt"; date
-	python3 subs2gene.py $out/subs3.txt $gene_info \
+	python3 $gitdir/subs2gene.py $out/subs3.txt $gene_info \
 	> $out/subs3.wg.txt
 	date; echo "Added(subs3.wg.txt)."
 
 	echo -ne "count_vars_per_pos "; date
-	python3 count_vars_per_pos.py $out/subs3.wg.txt \
+	python3 $gitdir/count_vars_per_pos.py $out/subs3.wg.txt \
 	> $out/subs3.wg.grouped.txt
 
 	echo -ne "gene_cov "; date
-	python3 gene_cov.py $out/subs3.wg.txt \
+	python3 $gitdir/gene_cov.py $out/subs3.wg.txt \
 	$out/reads.txt $gene_info \
 	$out/gene_cov.txt $out/gene_absent.txt
 
