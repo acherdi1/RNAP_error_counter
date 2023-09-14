@@ -1,8 +1,8 @@
 import re
 import sys
 
-dup_min = sys.argv[1] #4
-cov_min = sys.argv[2] #5
+dup_min = int(sys.argv[1]) #4
+cov_min = int(sys.argv[2]) #5
 #work_dir = sys.argv[3]
 input_file = sys.argv[3] #'/'.join([work_dir, "reads.txt"])
 output_file = sys.argv[4] #'/'.join([work_dir, "bcumis.me5dup_me5cov.txt"])

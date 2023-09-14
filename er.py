@@ -3,9 +3,9 @@ import sys
 import numpy as np
 from collections import defaultdict
 
-dup_min = sys.argv[1] #4
-cov_min = sys.argv[2] #5
-vars_exp =  sys.argv[3] #2
+dup_min = int(sys.argv[1]) #4
+cov_min = int(sys.argv[2]) #5
+vars_exp = int(sys.argv[3]) #2
 #work_dir = sys.argv[1]
 input_file =  sys.argv[4] #'/'.join([work_dir, "reads.txt"])
 bcumis_file= sys.argv[5] #'/'.join([work_dir,"bcumi_covd.txt"])
