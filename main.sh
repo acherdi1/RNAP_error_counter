@@ -4,8 +4,6 @@
 # NOT ONLY 0 and 16 in $2 => exclude >256, dissociate from chrom variable
 # MOVE er.p1.fin.py into bcumis_mt_th.py
 # introduce download
-# extend th_dup and th_cov into scripts
-# rewrite scripts so i could see all the names here
 
 #### PARAMETERS ####
 dataset=$1 #"GSE232273"
@@ -24,7 +22,10 @@ out="${dataset}/res/${sample}/"
 bam="${out}/Aligned.sortedByCoord.out.bam"
 bc_filtd="${out}/Solo.out/GeneFull/filtered/barcodes.tsv"
 th_dup=5
-th_cov=5
+th_dup_same=$(($th_dup-1)) #min nr of dups of consensus
+th_cov=5 # min nr of reads covering the position
+vars_exp=2 # expected nr of variants at the position to consider it as RNAP error
+# more - could be biological meaning, not error
 gene_info='genes.gex_mm10_2020_A'
 
 #### STAR settings, change only if run STAR ####
@@ -104,12 +105,12 @@ then
 	
 	echo "Extraction of cell barcodes and UMIs present in BAM file more than $th_dup times:"; date
 	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/bcumi_mt_th.py $th_dup $bc_filtd > ${out}/bcumis_mt_th.txt
+	/usr/bin/time -v python3 $gitdir/bcumi_dupd.py $th_dup $bc_filtd > ${out}/bcumi_dupd.txt
 	date; echo "Barcodes and UMIs are extracted."
 
 	echo "Line numbers extraction:"; date
 	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/line_nrs.py ${out}/bcumis_mt_th.txt > ${out}/line_nrs.txt
+	/usr/bin/time -v python3 $gitdir/line_nrs.py ${out}/bcumi_dupd.txt > ${out}/line_nrs.txt
 	date; echo "Line numbers are extracted."
 
 	echo "Lines extraction:"; date
@@ -124,7 +125,8 @@ then
 	date; echo "Lines are extracted."
 
 	echo "Extraction of UMIs covering at least 1NT equal or more than $th_dup times:"; date
-	/usr/bin/time -v python3 $gitdir/er.p1.fin.py $out/
+	/usr/bin/time -v python3 $gitdir/bcumi_covd.py \
+	$th_dup_same $th_cov $out/reads.txt $out/bcumi_covd.txt
 	date; echo "Barcodes and UMIs are extracted."
 fi
 
@@ -132,7 +134,10 @@ fi
 if (( $stage < 4 ))
 then 
 	echo "Calculating RNA Pol 2 error rate:"; date
-	/usr/bin/time -v python3 $gitdir/er.p2.fin.py $out/
+	/usr/bin/time -v python3 $gitdir/er.py \
+	$th_dup_same $th_cov $vars_exp \
+	$out/reads.txt $out/bcumi_covd.txt \
+	$out/subs.txt $out/er.txt
 	date; echo "Error rate is calculated."
 fi
 
