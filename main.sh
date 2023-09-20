@@ -15,6 +15,16 @@ stage=$3
 #3=errorrate and further
 #4=geneinfo 
 
+r_read="${dataset}/src/${sample}_${4}.fastq.gz"
+r_umi="${dataset}/src/${sample}_${5}.fastq.gz"
+star_params="$6"
+## CellRanger v3 or v2? if not v3, change:
+CBWL="CBwhitelist.CRv3.3M-february-2018.txt"
+#"CBWL.CRv2.737K-august-2016.txt"
+## which UMI length? if not 12, change:
+umi_len=12 #10
+threads=16
+
 ### not to change 
 workdir='/cellfile/datapublic/acherdi1/rnaspeed/'
 gitdir="$workdir/RNAP_error_counter/"
@@ -28,19 +38,6 @@ vars_exp=2 # expected nr of variants at the position to consider it as RNAP erro
 # more - could be biological meaning, not error
 gene_info='genes.gex_mm10_2020_A'
 
-#### STAR settings, change only if run STAR ####
-
-## CellRanger v3 or v2? if not v3, change:
-CBWL="CBwhitelist.CRv3.3M-february-2018.txt" #"CBWL.CRv2.737K-august-2016.txt"
-
-## which UMI length? if not 12, change:
-umi_len=12 #10
-
-r_read="${dataset}/src/${sample}_4.fastq.gz"
-r_umi="${dataset}/src/${sample}_3.fastq.gz"
-threads=16
-
-### not to change
 star_conda="/data/public/apapada1/Conda/anaconda/bin/activate star"
 genome="/data/public/apapada1/Felix_scRNAseq/starconda"
 #starlog="${out}/STAR.log"
@@ -75,7 +72,7 @@ then
 	threads=$threads
 	r_read=$r_read
 	r_umi=$r_umi
-
+	star_params=$star_params
 	""" # starlog=$starlog
 
 	source $star_conda
@@ -85,9 +82,9 @@ then
 	--readFilesIn $r_read $r_umi --soloType Droplet \
 	--soloCBwhitelist $CBWL --soloUMIfiltering MultiGeneUMI \
 	--soloCBmatchWLtype 1MM_multi_pseudocounts --outSAMtype BAM \
-	SortedByCoordinate --outFileNamePrefix $out \
+	Unsorted SortedByCoordinate --outFileNamePrefix $out \
 	--soloFeatures GeneFull --outSAMattributes CB UB GX GN \
-	--readFilesCommand zcat --soloUMIlen $umi_len  &> $starlog
+	--readFilesCommand zcat --soloUMIlen $umi_len $star_params #&> $starlog
 	date; echo "STAR finished."
 fi
 
@@ -121,7 +118,8 @@ then
 	        if($(NF-2)~/^G[NX]:Z:/){gene=substr($(NF-2),6)};
 	        print substr($(NF-1),6), $3"_"substr($2,1,1), 
 	        substr($NF,6), $4, $6, $10, gene
-	}' ${out}/line_nrs.txt - | /usr/bin/time -v sort > ${out}/reads.txt
+	}' ${out}/line_nrs.txt - > ${out}/reads.unsorted.txt
+	/usr/bin/time -v sort ${out}/reads.unsorted.txt > ${out}/reads.txt
 	date; echo "Lines are extracted."
 
 	echo "Extraction of UMIs covering at least 1NT equal or more than $th_dup times:"; date
