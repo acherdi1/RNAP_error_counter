@@ -119,7 +119,7 @@ then
 	        print substr($(NF-1),6), $3"_"substr($2,1,1), 
 	        substr($NF,6), $4, $6, $10, gene
 	}' ${out}/line_nrs.txt - > ${out}/reads.unsorted.txt
-	/usr/bin/time -v sort ${out}/reads.unsorted.txt > ${out}/reads.txt
+	/usr/bin/time -v sort ${out}/reads.unsorted.txt > ${out}/reads.txt && rm ${out}/reads.unsorted.txt
 	date; echo "Lines are extracted."
 
 	echo "Extraction of UMIs covering at least 1NT equal or more than $th_dup times:"; date
