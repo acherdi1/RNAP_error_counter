@@ -73,13 +73,13 @@ def proc():
 	for _bc in out:
 		for _umi in out[_bc]:
 			if len(out[_bc][_umi]) > 1:
-				bcumis[_bc, _umi] = False # if 5+ 5- and 5 next chr
+				bcumis[_bc][_umi] = False # if 5+ 5- and 5 next chr
 				continue
 			_strand = list(out[_bc][_umi].keys())[0]
 			if len(out[_bc][_umi][_strand]) < dup_min:
-				bcumis[_bc, _umi] = False
+				bcumis[_bc][_umi] = False
 				continue
-			if (_bc, _umi) not in bcumis:
+			if (_bc not in bcumis) or (_umi not in bcumis[_bc]):
 				starts_ends_dups = list()
 				for start_cigar in out[_bc][_umi][_strand]:
 					starts_ends_dup = cigar2pos(start_cigar)
@@ -92,7 +92,7 @@ def proc():
 				if starts_ends_umi:
 					bcumis[_bc][chrom_old][_umi] = (_strand, starts_ends_umi)
 			else:
-				bcumis[_bc, _umi] = False
+				bcumis[_bc][_umi] = False
 
 		if chrom_old not in bcumis[_bc]:
 			continue
@@ -102,7 +102,7 @@ def proc():
 			#print('len small 1')
 			#del bcumis[_bc]
 			for _umi in  bcumis[_bc][chrom_old]:
-				bcumis[_bc, _umi] = False
+				bcumis[_bc][_umi] = False
 			continue
 
 		#len(bcumis[_bc][_umi])==3
@@ -117,6 +117,7 @@ def proc():
 			#	continue
 			_strand, starts_ends_umi = bcumis[_bc][chrom_old][_umi]
 			#print(starts_ends_umi)
+			#exit()
 			starts_ends_umis[_strand].append(starts_ends_umi)
 
 		starts_ends_chrbc = dict()
@@ -128,29 +129,31 @@ def proc():
 			#if not bcumis[_bc][_umi]  or len(bcumis[_bc][_umi])==3:
 			#	continue
 			_strand, starts_ends_umi = bcumis[_bc][chrom_old][_umi]
-			#coords = íntersect(starts_ends_chrbc[_strand], starts_ends_umi, th=1)
-			#print(starts_ends_chrbc[_strand], starts_ends_umi)
-			#exit()
+			
 			if not starts_ends_chrbc[_strand]:
-				bcumis[_bc,_umi] = False
+				bcumis[_bc][_umi] = False
 				del bcumis[_bc][chrom_old][_umi]
 				continue
-			coords = íntersect([starts_ends_chrbc[_strand], starts_ends_umi], th=1)
+			coords = íntersect([starts_ends_chrbc[_strand], starts_ends_umi], th=2)
 			if coords:
 				bcumis[_bc][chrom_old][_umi] = (_strand, coords)
+				#print(starts_ends_chrbc[_strand], starts_ends_umi, coords)
+				#exit()
 			else:
-				bcumis[_bc,_umi] = False
+				bcumis[_bc][_umi] = False
 				del bcumis[_bc][chrom_old][_umi]
 
 
 		if len(bcumis[_bc][chrom_old])<cov_min:
 			#print('len small 2')
 			for _umi in  bcumis[_bc][chrom_old]:
-				bcumis[_bc,_umi] = False
+				bcumis[_bc][_umi] = False
 		else:
 			#print(2)
 			for _umi in  bcumis[_bc][chrom_old]:
-				bcumis[_bc,_umi] = True #(chrom_old, _strand, coords)
+				bcumis[_bc][_umi] = True #(chrom_old, _strand, coords)
+				_strand, coords = bcumis[_bc][chrom_old][_umi]
+				#print(_bc, chrom_old, _strand, _umi, *coords )
 				_bc_ = l_bcs[_bc]; _chr = list(chroms.keys())[chrom_old]
 				_umi_ = ''.join([d_let_inv[i] for i in list(str(_umi))])
 				print(_bc_, _chr, _strand, _umi_, *coords )
@@ -171,7 +174,9 @@ with open(filt_bcs) as f:
 		bc = line.strip()
 		filt_bcs_d[bc] = ind
 		ind += 1
-l_bcs = list(filt_bcs_d.keys())
+#l_bcs = list(filt_bcs_d.keys())
+
+bcumis_excl=sys.argv[4]
 
 chroms = dict()
 chrom_ind = 0
@@ -218,6 +223,11 @@ for line in sys.stdin:
 
 proc()
 
+with open(bcumis_excl, 'w') as f:
+	for bc in bcumis:
+		for umi in bcumis[bc]:
+			if not bcumis[bc][umi]:
+				print(bc, umi, file=f)
 
 exit()
 
