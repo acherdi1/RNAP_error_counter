@@ -1,93 +1,71 @@
+# memory improvement: save BC as indices as in bcumi_dupd_cov.py
 
-from collections import defaultdict
+
+# when len_cov is dict and counted out of sript:
+# time 458s
+# RAM 2.43GB
+
+# cov to str => RAM 2.42 , 
+#but comparison in strings one by one letter?
+# time 462s, neglectable increase
+
+
+#from collections import defaultdict
 import sys
 import re
 #import numpy as np
 
-#default_genome = lambda: defaultdict(lambda: defaultdict(
-#	lambda: defaultdict())) # lambda: {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
-#out = defaultdict(default_genome)
-#for i in range(seq_len):
-#		out[bc][chrom][umi][coords[i]][seq[i]] += 1
 
-#out = defaultdict(lambda: dict())
+dup_min = int(sys.argv[1]) #4
+cov_min = int(sys.argv[2]) #5
+vars_exp = int(sys.argv[3]) #2
+#work_dir = sys.argv[1]
+#input_file = sys.argv[4] #'/'.join([work_dir, "reads.txt"])
+#bcumis_file= sys.argv[5] #'/'.join([work_dir,"bcumi_covd.txt"])
+filtered = sys.argv[4] #'interm4'
+address_subs= sys.argv[5] #'/'.join([work_dir, "subs.txt"])
+address_er= sys.argv[6] #'/'.join([work_dir, "er.txt"])
+
+with open(address_subs, 'w') as f:
+	pass
+
 out = dict()
 
-chroms = dict()
-chrom_ind = 0
+#chroms = dict()
+#chrom_ind = 0
 
-with open('interm4') as f:
+with open(filtered) as f:
 	for line in f: 
-		#print(line.strip())
 		line = line.strip()
 		info, starts, ends = line.split("[")
-		bc, chrom, strand, umi = info.split()
+		#bc, chrom, strand, umi = info.split()
+		bc, umi, chrom, strand = info.split()
 		strand = int(strand[0])
-		if chrom not in chroms:
-			chroms[chrom] = chrom_ind
-			chrom_ind += 1
-		chrom = chroms[chrom]
-		#if chrom != "chr19":
-		#	continue
+		#if chrom not in chroms:
+		#	chroms[chrom] = chrom_ind
+		#	chrom_ind += 1
+		#chrom = chroms[chrom]
 		starts = [int(i) for i in starts.strip('] ').split(', ')]
 		ends = [int(i) for i in ends.strip('] ').split(', ')]
-
-		#if (bc, chrom,strand) not in out:
-		#	out[bc,chrom,strand] = dict()
-		#if umi not in out[bc, chrom,strand]:
-		#	out[bc,chrom,strand][umi] = dict()
-		#for chunk in range(len(starts)):
-		#	for pos in range(starts[chunk], ends[chunk]):
-		#		out[bc,chrom,strand][umi][pos] = np.zeros(4,np.uint8) #{1: 0, 2: 0, 3: 0, 4: 0, 0: 0} #[nt[i]] = 1
-		if (bc, chrom,strand) not in out:
-			out[bc,chrom,strand] = {umi:(starts, ends)}
+		if chrom not in out:
+			out[chrom] = dict()
+		if (bc,strand) not in out[chrom]:
+			out[chrom][bc,strand] = {umi:(starts, ends)}
 		else:
-			out[bc,chrom,strand][umi] = (starts, ends)
-		#print(out)
-		#print(out[bc])
-		#print(out[bc][chrom])
-		#print(out[bc][chrom][umi])
-		#print(out[bc][chrom][umi][pos])
-		#exit()
-		#bcumis.append()
-
-#exit()
+			out[chrom][bc,strand][umi] = (starts, ends)
 
 
-chrom_old=''
-#for i in chroms:
-#	print(i, chroms[i])
-#exit()
-pattern = re.compile(r'(\d+)([MIDNS])') 
-nt2int = {"N":0, "A":1,"C":2,"T":3,"G":4}
 
-for line in sys.stdin:
-	#print(line)
-	#exit()
-	line = line.strip().split() #"\t"
-	if line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[4]!="255" or line[2]=="chrM" or int(line[1])>=256:
-		continue
-	chrom = line[2]
-	if chrom not in chroms:
-		continue
-	chrom = chroms[chrom]
-	bc = line[-2][5::] ; umi = line[-1][5::] ; strand = int(line[1][0])
+def unpack_startsends(chrom,bc_strand,umi):
+	global out
+	starts, ends = out[chrom][bc_strand][umi]
+	out[chrom][bc_strand][umi] = dict()
+	for chunk in range(len(starts)):
+		for pos in range(starts[chunk], ends[chunk]):
+			out[chrom][bc_strand][umi][pos] = [0,0,0,0,0] #{1: 0, 2: 0, 3: 0, 4: 0, 0: 0} #[nt[i]] = 1
 
-	if ((bc, chrom,strand) not in out) or (umi not in out[bc,chrom,strand]):
-		continue
-
-	#out[bc,chrom,strand][umi] = (starts, ends)
-	if isinstance(out[bc,chrom,strand][umi], tuple):
-		starts, ends = out[bc,chrom,strand][umi]
-		out[bc,chrom,strand][umi] = dict()
-		#exit()
-		for chunk in range(len(starts)):
-			for pos in range(starts[chunk], ends[chunk]):
-				out[bc,chrom,strand][umi][pos] = [0,0,0,0,0] #{1: 0, 2: 0, 3: 0, 4: 0, 0: 0} #[nt[i]] = 1
-
-	start = int(line[3]); cigar = line[5]; seq = list(line[9])
-	#exit()
-	pos = int(start)
+def pileup(pos, cigar, seq):
+	global out
 	pos_in = 0
 	cigar_ops = pattern.findall(cigar) 
 	if cigar_ops[0][1] == 'S':
@@ -98,18 +76,167 @@ for line in sys.stdin:
 		if op == 'M':
 			#coords[pos_in:(pos_in+length)] = range(pos, pos + length)
 			for i in range(length):
-				if pos+i in out[bc,chrom,strand][umi]:
+				if pos+i in out[chrom][bc,strand][umi]:
 					nt_ind = nt2int[seq[pos_in+i]]
-					out[bc,chrom,strand][umi][pos+i][nt_ind] += 1
+					out[chrom][bc,strand][umi][pos+i][nt_ind] += 1
 			pos_in += length
 		elif op == 'I':
 			pos_in += length
 			continue
 		pos += length
-	#print(bc,chrom,strand, umi)
-	#print(out[bc,chrom,strand][umi])
-	#exit()
 
+
+
+
+def leave_only_max(d):
+	dmax=[0,0]
+	for i in range(5):
+		if d[i]>dmax[1]:
+			dmax=[i,d[i]]
+	return(dmax)
+
+def umi_consensus(bc_strand, chrom, umi): #, dup_min
+	global out
+	for pos in list(out[chrom][bc_strand][umi].keys()):
+		nt, cov = leave_only_max(out[chrom][bc_strand][umi][pos])
+		#if cov < dup_min or not nt:
+		#	del out[chrom][bc_strand][umi][pos]
+		#else:
+		#	out[chrom][bc_strand][umi][pos] = nt
+		if cov >= dup_min and nt:
+			if pos in out[chrom][bc_strand]:
+				out[chrom][bc_strand][pos][umi] = nt
+			else:
+				out[chrom][bc_strand][pos] = {umi: nt}
+		del out[chrom][bc_strand][umi][pos]
+
+	#if not out[chrom][bc_strand][umi]:
+	del out[chrom][bc_strand][umi]
+
+
+
+
+def variance(bc_strand, chrom): 
+	global out, len_cov
+	len_cov_chr = 0
+	len_cov_err_chr = 0
+	for pos in list(out[chrom][bc_strand].keys()):
+		if len(out[chrom][bc_strand][pos]) < cov_min:
+			del out[chrom][bc_strand][pos]
+			continue
+		len_cov_chr += 1
+		d = dict() 
+		for umi in list(out[chrom][bc_strand][pos].keys()):
+			if out[chrom][bc_strand][pos][umi] in d:
+				d[out[chrom][bc_strand][pos][umi]] += 1
+			else:
+				d[out[chrom][bc_strand][pos][umi]] = 1
+		variants = len(d)
+		if variants != vars_exp or min(d.values())>1:
+			del out[chrom][bc_strand][pos]
+			continue
+			# 1) remove those where mismatch is repeated more than once on the same position!
+			# so when more than one umi contains mismatch on the same position
+			# bc pol2 error hardly could happen twice at the same position
+			# meaning that mismatch probably happened due to some other reasons
+			# 2) remove if there are more than 2 variants per min position
+			# same reasoning
+		len_cov_err_chr += 1
+		out[chrom][bc_strand][pos] = sorted(d, key=d.get, reverse=True) #d
+		out[chrom][bc_strand][pos] = [int2nt[i] for i in out[chrom][bc_strand][pos]]
+		# mismatch from which to which nt
+		#[1] " AC" " TA"
+
+	#return(len_cov_chr, len_cov_err_chr)
+	_bc = bc_strand[0]
+	if _bc in len_cov:
+		len_cov[_bc][0] += len_cov_err_chr ; len_cov[_bc][1] += len_cov_chr
+	else:
+		len_cov[_bc] = [len_cov_err_chr, len_cov_chr]
+
+
+
+def record_substitutions(address, chrom):
+	with open(address, "a") as f:
+		for bc_strand in out[chrom]:
+			for pos in out[chrom][bc_strand]:
+				print(*bc_strand, chrom, pos, *out[chrom][bc_strand][pos], file = f)
+
+def record_errorrate(address): #er, 
+	with open(address, "w") as f:
+		for bc in len_cov:
+			if len_cov[bc][1]:
+				print(bc, len_cov[bc][0]/len_cov[bc][1], *len_cov[bc], file = f) #errorRate
+
+
+chrom_old=''
+pattern = re.compile(r'(\d+)([MIDNS])') 
+nt2int = {"N":0, "A":1,"C":2,"T":3,"G":4}
+int2nt = {v: k for k, v in nt2int.items()}
+
+len_cov = dict() 
+
+for line in sys.stdin:
+	line = line.strip().split() #"\t"
+	#if line[2]!="chr1" or line[-2]!="CB:Z:ACACAGTAGAGAGGGC" :
+	#	continue
+
+
+	# if reading from reads.txt
+	#bc, chr_str, umi, start, cigar, seq, _ = line
+	#chrom, strand = chr_str.split('_')
+	#seq = list(seq)
+	#start = int(start)
+	#strand = int(strand)
+	#start_cigar = '_'.join([start, cigar])
+	#if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
+	#	print(umi)
+	#	continue
+	#if False: # if reading from reads.txt
+	if line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[4]!="255" or line[2]=="chrM" or int(line[1])>=256:
+		continue
+	chrom = line[2]
+	#if chrom not in chroms:
+	#	continue
+	#chrom = chroms[chrom]
+	bc = line[-2][5::] ; umi = line[-1][5::] ; strand = int(line[1][0])
+
+	if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
+		continue
+
+	start = int(line[3]); cigar = line[5]
+	seq = list(line[9]) # [nt2int[i] for i in list(line[9])] 
+	# but is it better? strings from different lists are probably 
+	# the same objects, meaning that "A" from all its positions 
+	# in all seqs would take total 64 bytes
+
+	if chrom != chrom_old:
+		if chrom_old:
+			#print('here', len(out[chrom_old]))
+			for bc_strand in out[chrom_old]:
+				for _umi in list(out[chrom_old][bc_strand].keys()):
+					umi_consensus(bc_strand, chrom_old, _umi) # _bc _chr _umi
+				variance(bc_strand, chrom_old)
+			record_substitutions(address_subs, chrom_old)
+			del out[chrom_old]
+		chrom_old = chrom
+		for bc_strand in out[chrom]:
+			for _umi in out[chrom][bc_strand]:
+				unpack_startsends(chrom, bc_strand, _umi)
+
+	#if isinstance(out[chrom][bc,strand][umi], tuple):
+	#	unpack_startsends(bc,chrom,strand,umi)
+	pileup(start, cigar, seq)
+	
+if chrom in out:
+	for bc_strand in out[chrom]:
+		for _umi in list(out[chrom][bc_strand].keys()):
+			umi_consensus(bc_strand, chrom, _umi) # _bc _chr _umi
+		variance(bc_strand, chrom) 
+
+	record_substitutions(address_subs, chrom)
+
+record_errorrate(address_er)
 exit()
 
 

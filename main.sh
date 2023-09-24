@@ -20,7 +20,7 @@ r_umi="${dataset}/src/${sample}_${5}.fastq.gz"
 star_params="$6"
 ## CellRanger v3 or v2? if not v3, change:
 CBWL="CBwhitelist.CRv3.3M-february-2018.txt"
-#"CBWL.CRv2.737K-august-2016.txt"
+#CBWL="CBWL.CRv2.737K-august-2016.txt"
 ## which UMI length? if not 12, change:
 umi_len=12 #10
 threads=16
@@ -87,6 +87,7 @@ then
 	--readFilesCommand zcat --soloUMIlen $umi_len $star_params #&> $starlog
 	date; echo "STAR finished."
 fi
+#exit()
 
 if (( $stage < 3 ))
 then
@@ -100,41 +101,41 @@ then
 	
 	""" 
 	
-	echo "Extraction of cell barcodes and UMIs present in BAM file more than $th_dup times:"; date
+	echo "Extraction of cell barcodes + UMIs with enough duplicates per UMI and covering at least 1 nt with enough depth:"; date
 	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/bcumi_dupd.py $th_dup $bc_filtd > ${out}/bcumi_dupd.txt
+	/usr/bin/time -v python3 $gitdir/bcumi_dupd_covd.py $th_dup $th_cov $bc_filtd ${out}/covd.txt
 	date; echo "Barcodes and UMIs are extracted."
 
-	echo "Line numbers extraction:"; date
-	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/line_nrs.py ${out}/bcumi_dupd.txt > ${out}/line_nrs.txt
-	date; echo "Line numbers are extracted."
+	#echo "Line numbers extraction:"; date
+	#samtools view $bam |
+	#/usr/bin/time -v python3 $gitdir/line_nrs.py ${out}/bcumi_dupd.txt > ${out}/line_nrs.txt
+	#date; echo "Line numbers are extracted."
 
-	echo "Lines extraction:"; date
-	samtools view $bam |
-	/usr/bin/time -v awk 'NR==FNR {
-	        linesToPrint[$0]; next
-	} FNR in linesToPrint {
-	        if($(NF-2)~/^G[NX]:Z:/){gene=substr($(NF-2),6)};
-	        print substr($(NF-1),6), $3"_"substr($2,1,1), 
-	        substr($NF,6), $4, $6, $10, gene
-	}' ${out}/line_nrs.txt - > ${out}/reads.unsorted.txt
-	/usr/bin/time -v sort ${out}/reads.unsorted.txt > ${out}/reads.txt && rm ${out}/reads.unsorted.txt
-	date; echo "Lines are extracted."
+	#echo "Lines extraction:"; date
+	#samtools view $bam |
+	#/usr/bin/time -v awk 'NR==FNR {
+	#        linesToPrint[$0]; next
+	#} FNR in linesToPrint {
+	#        if($(NF-2)~/^G[NX]:Z:/){gene=substr($(NF-2),6)};
+	#        print substr($(NF-1),6), $3"_"substr($2,1,1), 
+	#        substr($NF,6), $4, $6, $10, gene
+	#}' ${out}/line_nrs.txt - > ${out}/reads.unsorted.txt
+	#/usr/bin/time -v sort ${out}/reads.unsorted.txt > ${out}/reads.txt && rm ${out}/reads.unsorted.txt
+	#date; echo "Lines are extracted."
 
-	echo "Extraction of UMIs covering at least 1NT equal or more than $th_cov times:"; date
-	/usr/bin/time -v python3 $gitdir/bcumi_covd.py \
-	$th_dup_same $th_cov $out/reads.txt $out/bcumi_covd.txt
-	date; echo "Barcodes and UMIs are extracted."
+	#echo "Extraction of UMIs covering at least 1NT equal or more than $th_cov times:"; date
+	#/usr/bin/time -v python3 $gitdir/bcumi_covd.py \
+	#$th_dup_same $th_cov $out/reads.txt $out/bcumi_covd.txt
+	#date; echo "Barcodes and UMIs are extracted."
 fi
 
 
 if (( $stage < 4 ))
 then 
 	echo "Calculating RNA Pol 2 error rate:"; date
-	/usr/bin/time -v python3 $gitdir/er.py \
-	$th_dup_same $th_cov $vars_exp \
-	$out/reads.txt $out/bcumi_covd.txt \
+	samtools view $bam |
+	/usr/bin/time -v python3 $gitdir/er.v2.py \
+	$th_dup $th_cov $vars_exp $out/covd.txt \
 	$out/subs.txt $out/er.txt
 	date; echo "Error rate is calculated."
 fi
