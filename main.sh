@@ -101,10 +101,12 @@ then
 	
 	""" 
 	
-	echo "Extraction of cell barcodes + UMIs with enough duplicates per UMI and covering at least 1 nt with enough depth:"; date
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "Subsetting covered positions (min. $th_cov UMIs per pos, min. $th_dup duplicates per UMI)"
 	samtools view $bam |
 	/usr/bin/time -v python3 $gitdir/bcumi_dupd_covd.py $th_dup $th_cov $bc_filtd ${out}/covd.txt
-	date; echo "Barcodes and UMIs are extracted."
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "Covered positions subsetted"
 
 	#echo "Line numbers extraction:"; date
 	#samtools view $bam |
@@ -132,37 +134,52 @@ fi
 
 if (( $stage < 4 ))
 then 
-	echo "Calculating RNA Pol 2 error rate:"; date
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "Calculating RNA Pol 2 error rate:"
 	samtools view $bam |
 	/usr/bin/time -v python3 $gitdir/er.v2.py \
 	$th_dup $th_cov $vars_exp $out/covd.txt \
 	$out/subs.txt $out/er.txt
-	date; echo "Error rate is calculated."
+	date +"%a %d.%b %T"| tr '\n' ' ' 
+	echo "Error rate is calculated."
 fi
 
 if (( $stage < 5 ))
 then 
+	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Introducing gene information:"
 
-	echo "Editing subs.txt (adding strand info)"; date
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "Editing subs.txt (adding strand info) "
+	# rewrite er.v2.py and exclude this first chunk
 	cat $out/subs.txt | 
-	sed 's/_1/ -/g' | sed 's/_0/ +/g'  > $out/subs3.txt
-	date; echo "Edited (subs3.txt)."
+	awk 'BEGIN{s[0]="+";s[1]="-"} {print $1, $3, s[$2], $4, $5, $6}' > $out/subs3.txt
+	# sed 's/ 1 / - /g' | sed 's/ 0 / + /g'  > $out/subs3.txt
+	#date; echo "Edited (=>subs3.txt)."
 
-	echo "Adding gene info to subs3.txt"; date
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "Adding gene info to subs3.txt "
 	python3 $gitdir/subs2gene.py $out/subs3.txt $gene_info \
-	> $out/subs3.wg.txt
-	date; echo "Added(subs3.wg.txt)."
+	> $out/subs.wg.txt
+	# date; echo "Added(subs.wg.txt)."
 
-	echo -ne "count_vars_per_pos "; date
-	python3 $gitdir/count_vars_per_pos.py $out/subs3.wg.txt \
-	> $out/subs3.wg.grouped.txt
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "count_vars_per_pos "
+	python3 $gitdir/count_vars_per_pos.py $out/subs.wg.txt \
+	> $out/subs.wg.grouped.txt
+	#date | tr '\n' ' ' ; echo "Counted."
 
-	echo -ne "gene_cov "; date
-	python3 $gitdir/gene_cov.py $out/subs3.wg.txt \
-	$out/reads.txt $gene_info \
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "gene_cov "
+	samtools view $bam |
+	python3 $gitdir/gene_cov.py \
+	$out/subs.wg.txt $gene_info \
 	$out/gene_cov.txt $out/gene_absent.txt
 
-	echo -ne "sort "; date
+	date +"%a %d.%b %T" | tr '\n' ' ' 
+	echo "sort "
 	cat $out/gene_cov.txt | sort -rnk 5 > $out/gene_cov.sorted.txt
 fi
+echo
+echo "DONE!"
+date
