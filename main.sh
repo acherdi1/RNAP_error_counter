@@ -2,7 +2,6 @@
 
 ## CURRENT ISSUES AND TASKS
 # NOT ONLY 0 and 16 in $2 => exclude >256, dissociate from chrom variable
-# MOVE er.p1.fin.py into bcumis_mt_th.py
 # introduce download
 
 #### PARAMETERS ####
@@ -104,7 +103,8 @@ then
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Subsetting covered positions (min. $th_cov UMIs per pos, min. $th_dup duplicates per UMI)"
 	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/bcumi_dupd_covd.py $th_dup $th_cov $bc_filtd ${out}/covd.txt
+	awk '$5~/255/ && $2<256 && $(NF-1)!~/CB:Z:-/ && $NF!~/UB:Z:-/' |
+	/usr/bin/time -v python3 $gitdir/subset_pos.py $th_dup $th_cov $bc_filtd ${out}/covd.txt
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Covered positions subsetted"
 

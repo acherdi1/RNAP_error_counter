@@ -2,19 +2,8 @@ import sys
 from collections import defaultdict
 import re
 import bisect
-
-
-# only add2out(), exit when chrom_old => 42s 1.3GB
-# StringIO => 26s, 0.3GB!!!
-
-#sys.getsizeof({k:1 for k in range(5000)})
-#147552
-#sys.getsizeof({k:1 for k in range(50000)})
-#2621536
-#sys.getsizeof({1:{k:1 for k in range(25000)}, 2:{k:1 for k in range(25000)}})
-#232
-# so nestedness is a cure against extramem issues
-
+from microdict import mdict
+import io 
 
 def cigar2pos(start_cigar): 
 	pos, cigar = start_cigar.split("_") # start_cigar #
@@ -74,13 +63,12 @@ def proc(chrom):
 	global out 
 	for bc in out: 
 		for umi in list(out[bc].keys()): # changed size bc of +out[bc][chrom]
-			#for umi_p2 in list(out[bc][umi_p1].keys()):
 			if len(out[bc][umi]) > 1:
-				add2bcumis(bc, umi, False) 
+				bad2bcumis(bc, umi) 
 				continue
 			strand = list(out[bc][umi].keys())[0]
 			if out[bc][umi][strand][0] < dup_min:
-				add2bcumis(bc, umi, False)
+				bad2bcumis(bc, umi)
 				continue
 			starts_ends_dups = list()
 			start_cigars = out[bc][umi][strand][1]
@@ -95,14 +83,14 @@ def proc(chrom):
 				else:
 					out[bc][chrom] = {umi:(strand, starts_ends_umi)}
 			else:
-				add2bcumis(bc, umi, False)
+				bad2bcumis(bc, umi)
 
 		if chrom not in out[bc]:
 			continue
 
 		if len(out[bc][chrom]) < cov_min :
 			for umi in  out[bc][chrom]:
-				add2bcumis(bc, umi, False)
+				bad2bcumis(bc, umi)
 			del out[bc][chrom]
 			continue
 
@@ -117,7 +105,7 @@ def proc(chrom):
 			if not starts_ends_chrbc[strand]:
 				for umi in list(out[bc][chrom].keys()): 
 					if out[bc][chrom][umi][0] == strand:
-						add2bcumis(bc, umi, False)
+						bad2bcumis(bc, umi)
 						del out[bc][chrom][umi]
 						continue
 		for umi in list(out[bc][chrom].keys()): 
@@ -126,20 +114,20 @@ def proc(chrom):
 			if coords:
 				out[bc][chrom][umi] = (strand, coords)
 			else:
-				add2bcumis(bc, umi, False)
+				bad2bcumis(bc, umi)
 				del out[bc][chrom][umi]
 
 		if len(out[bc][chrom])<cov_min:
 			for umi in  out[bc][chrom]:
-				add2bcumis(bc, umi, False)
+				bad2bcumis(bc, umi)
 			del out[bc][chrom]
 			continue
 
 		for umi in  out[bc][chrom]:
 			strand, coords = out[bc][chrom][umi]
 			#bcumis[bc][umi] = ' '.join([chrom, strand, str(coords[0]), str(coords[1])]) #True #
-			value = ' '.join([chrom, strand, str(coords[0]), str(coords[1])]) #True #
-			add2bcumis(bc, umi, value)
+			value = ' '.join([chrom, strand, str(coords[0]), str(coords[1]), ";"]) #True #
+			good2bcumis(bc, umi, value)
 
 		del out[bc][chrom]
 
@@ -153,18 +141,11 @@ def add2out(bc, umi, strand, start_cigar):
 				out[bc][umi][strand][0] += 1
 				out[bc][umi][strand][1] = ','.join([out[bc][umi][strand][1], start_cigar])
 			else:
-				add2bcumis(bc, umi, False)
+				bad2bcumis(bc, umi)
 		else:
 			out[bc][umi] = {strand:[1, start_cigar]}
 	else:
 		out[bc] = {umi:{strand:[1, start_cigar]}}
-
-def add2bcumis(bc, umi, value):
-	global bcumis
-	if bc in bcumis:
-		bcumis[bc][umi] = value
-	else:
-		bcumis[bc] = {umi:value}
 
 
 pattern = re.compile(r'(\d+)([MIDNS])') 
@@ -173,37 +154,133 @@ dup_min = int(sys.argv[1]) #5
 cov_min = int(sys.argv[2]) #5
 
 filt_bcs=sys.argv[3]
-filt_bcs_d=dict()
+bcumis=dict()
+keeper= io.StringIO() #[False]
+keeper.write(';')
+keeper_ind = 1
 with open(filt_bcs) as f:
-	bc_ind = 1 
 	for line in f.readlines():
 		bc = line.strip()
-		filt_bcs_d[bc] = bc_ind
-
+		bcumis[''.join(['CB:Z:',bc])] = mdict.create("i32:i32") # mdict.create('str:str', 70, 500) #"i64:i32") #dict() 
 out_file = sys.argv[4]
 
+
+
+#d_let = {'A':'00','C':'01','G':'10','T':'11'}
+d_let = {'A':'0','C':'1','G':'2','T':'3'}
+
 #bcumis = defaultdict(lambda: defaultdict(lambda: dict() ))
-bcumis = dict()
+#bcumis = dict()
+def add2bcumis_not(bc, umi, value):
+	global bcumis
+	#umi1=umi[5]
+
+	#umi1=sys.intern(umi[5])
+
+	#umi1=sys.intern(umi[5:7])
+
+	#umi1=sys.intern(umi[5:9])
+	#umi2=sys.intern(umi[10:14])
+	#umi3=sys.intern(umi[15:19])
+
+	#umi1=int(''.join([d_let[nt] for nt in list(umi[5:9])]),2)
+	#umi2=int(''.join([d_let[nt] for nt in list(umi[10:14])]),2)
+	#umi3=int(''.join([d_let[nt] for nt in list(umi[15:19])]),2)
+
+	#umicode=(umi1,umi2,umi3)
+
+	#umicode=umi1*1000000+umi2*1000+umi3
+
+	umicode=int(''.join([d_let[nt] for nt in umi[5::]]))
+
+	#umi1=int(umicode[0:2])
+	#umicode=int(umicode)
+
+	if umi1 not in bcumis[bc]:
+		bcumis[bc][umi1] = {umicode:value}
+	else:
+		bcumis[bc][umi1][umicode] = value
+
+	#if umicode not in bcumis[bc]:
+	#	bcumis[bc][umicode] = value
+	#else:
+	#	bcumis[bc][umicode] = False
+
+	#if bc not in bcumis:
+	#	bcumis[bc] = {umi1:{umi2:{umi3:value}}}
+	#if umi1 not in bcumis[bc]:
+	#	bcumis[bc][umi1] = {umi2:{umi3:value}}
+	#elif umi2 not in bcumis[bc][umi1]:
+	#	bcumis[bc][umi1][umi2] = {umi3:value}
+	#else:
+	#	bcumis[bc][umi1][umi2][umi3] = False
+	
+	#elif umi1 not in bcumis[bc]:
+	#	bcumis[bc][umi1] = {umi:value}
+	#else:
+	#	bcumis[bc][umi1][umi] = value
+
+
+def bad2bcumis(bc, umi):
+	global bcumis
+	bcumis[bc][umi] = 0 # 0 False ''
+
+def good2bcumis(bc, umi, value):
+	global bcumis, keeper, keeper_ind
+	bcumis[bc][umi] = keeper_ind # keeper_ind value
+	#keeper.append(value)
+	keeper.write(value)
+	keeper_ind += 1
+
 out = dict()
 #out = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [int(), str()] ))) #list() # [int(), str()] #, tuple() 
 #out_def=defaultdict(lambda: defaultdict(lambda: [int(), str()] ))
 #out = defaultdict(lambda: out_def)
 
 chrom_old=''
+#d_let = {'A':'0','C':'1','G':'2','T':'3'}
+l='ACGT'
+umi2code_d = dict(zip([''.join([a,b,c,d])
+    for a in l for b in l for c in l for d in l],
+    range(256)))
+#from textwrap import wrap
+#from functools import reduce
+#a1 = [l[0:4], l[4:8],l[8:12] ] # wrap(l,4)
+#a2 = map(lambda x: umi2code_d[x], a1)
+#reduce(lambda x, y: x * 1000 + y, a2)
+
 
 for line in sys.stdin:
-	line = line.strip().split() #"\t"
-	if (line[4]!="255" or int(line[1])>=256 or line[-2][5::] not in filt_bcs_d or line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[2]=="chrM"):
+	line = line.strip().split() #"\t" #[5::]
+	#strand, chrom, start,cigar,bc,umi = line.strip().split(' ')
+	#if (line[4]!="255" or int(line[1])>=256 or line[-2] not in filt_bcs_d or line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[2]=="chrM"):
+	if (line[-2] not in bcumis or line[2]=="chrM"):
+		#if (bc not in bcumis or chrom=="chrM"):
 		continue
 
-	bc = line[-2][5::]; umi = line[-1][5::] 
-	if (bc in bcumis) and (umi in bcumis[bc]):
-		add2bcumis(bc, umi, False)
+	bc = line[-2] #[5::]
+	umi= line[-1] #int(umi)
+	#umi = hash(line[-1]) # #[5::] # export PYTHONHASHSEED=1 in terminal before running script
+	# way faster but i dont wanna collisions :( 
+	# even tho the probability of it is slow, but 
+	# i don't wanna risk it
+	#umi = int(''.join([d_let[nt] for nt in umi[5::]])) # #[5::] # export PYTHONHASHSEED=1 in terminal before running script
+	# found faster
+	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] 
+	#continue
+
+	#add2bcumis(bc, umi, False)
+	#bad2bcumis(bc, umi)
+	#continue
+
+	if umi in bcumis[bc]:
+		bad2bcumis(bc, umi)
 		continue
 
 	strand = line[1][0] 
 	if (bc in out) and (umi in out[bc]) and (strand not in out[bc][umi]): 
-		add2bcumis(bc, umi, False) ; continue
+		bad2bcumis(bc, umi) 
+		continue
 
 	chrom = line[2]
 	start_cigar = '_'.join([line[3], line[5]])
@@ -218,12 +295,43 @@ for line in sys.stdin:
 	#out[bc][umi][strand][0] += 1
 	#out[bc][umi][strand][1] = ','.join([out[bc][umi][strand][1], start_cigar])
 
+#exit()
+
+if False:
+	total_dict=0
+	total_umistrings=0
+
+	total_dict += sys.getsizeof(bcumis)
+	#print("bcumis",sys.getsizeof(bcumis))
+	for bc in bcumis:
+		#print(bc, sys.getsizeof(bcumis[bc]))
+		#total_dict=0
+		#total_umistrings=0
+		total_umistrings += sys.getsizeof(bc)
+		total_dict += sys.getsizeof(bcumis[bc])
+		for umi1 in bcumis[bc]:
+			#print(bc, umi1, sys.getsizeof(bcumis[bc][umi1]))
+			total_umistrings += sys.getsizeof(umi1)
+			#total_dict += sys.getsizeof(bcumis[bc][umi1])
+			#for umicode in bcumis[bc][umi1]:
+			#	total_umistrings += sys.getsizeof(umicode)
+	print("total_dict", total_dict )
+	print("total_umistrings", total_umistrings )
+
+	# import psutil
+	# pid = os.getpid()
+	# memUse = psutil.Process(pid).memory_info()[0]/2.**10 #in kbytes **20 MB **30 GB
+
+	#exit()
 
 proc(chrom)
 
+keeper.seek(0)
+result = keeper.read().split(';')
 with open(out_file, 'w') as f:
 	for bc in bcumis:
 		for umi in bcumis[bc]:
 			if bcumis[bc][umi]:
-				print(bc, umi, bcumis[bc][umi], file=f)
+				#print(bc, umi, bcumis[bc][umi], file=f)
+				print(bc, umi, result[bcumis[bc][umi]], file=f)
 exit()
