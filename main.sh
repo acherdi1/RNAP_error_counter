@@ -107,28 +107,6 @@ then
 	/usr/bin/time -v python3 $gitdir/subset_pos.py $th_dup $th_cov $bc_filtd ${out}/covd.txt
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Covered positions subsetted"
-
-	#echo "Line numbers extraction:"; date
-	#samtools view $bam |
-	#/usr/bin/time -v python3 $gitdir/line_nrs.py ${out}/bcumi_dupd.txt > ${out}/line_nrs.txt
-	#date; echo "Line numbers are extracted."
-
-	#echo "Lines extraction:"; date
-	#samtools view $bam |
-	#/usr/bin/time -v awk 'NR==FNR {
-	#        linesToPrint[$0]; next
-	#} FNR in linesToPrint {
-	#        if($(NF-2)~/^G[NX]:Z:/){gene=substr($(NF-2),6)};
-	#        print substr($(NF-1),6), $3"_"substr($2,1,1), 
-	#        substr($NF,6), $4, $6, $10, gene
-	#}' ${out}/line_nrs.txt - > ${out}/reads.unsorted.txt
-	#/usr/bin/time -v sort ${out}/reads.unsorted.txt > ${out}/reads.txt && rm ${out}/reads.unsorted.txt
-	#date; echo "Lines are extracted."
-
-	#echo "Extraction of UMIs covering at least 1NT equal or more than $th_cov times:"; date
-	#/usr/bin/time -v python3 $gitdir/bcumi_covd.py \
-	#$th_dup_same $th_cov $out/reads.txt $out/bcumi_covd.txt
-	#date; echo "Barcodes and UMIs are extracted."
 fi
 
 
@@ -155,19 +133,16 @@ then
 	cat $out/subs.txt | 
 	awk 'BEGIN{s[0]="+";s[1]="-"} {print $1, $3, s[$2], $4, $5, $6}' > $out/subs3.txt
 	# sed 's/ 1 / - /g' | sed 's/ 0 / + /g'  > $out/subs3.txt
-	#date; echo "Edited (=>subs3.txt)."
 
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Adding gene info to subs3.txt "
 	python3 $gitdir/subs2gene.py $out/subs3.txt $gene_info \
 	> $out/subs.wg.txt
-	# date; echo "Added(subs.wg.txt)."
 
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "count_vars_per_pos "
 	python3 $gitdir/count_vars_per_pos.py $out/subs.wg.txt \
 	> $out/subs.wg.grouped.txt
-	#date | tr '\n' ' ' ; echo "Counted."
 
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "gene_cov "
