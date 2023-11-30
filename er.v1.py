@@ -1,20 +1,5 @@
-# memory improvement: save BC as indices as in bcumi_dupd_cov.py
-
-
-# when len_cov is dict and counted out of sript:
-# time 458s
-# RAM 2.43GB
-
-# cov to str => RAM 2.42 , 
-#but comparison in strings one by one letter?
-# time 462s, neglectable increase
-
-
-#from collections import defaultdict
 import sys
 import re
-from microdict import mdict 
-#import numpy as np
 
 max_chr_len = 195154279
 dup_min = int(sys.argv[1]) #4
@@ -31,9 +16,6 @@ with open(address_subs, 'w') as f:
 	pass
 
 out = dict()
-
-#chroms = dict()
-#chrom_ind = 0
 
 with open(cov_file) as f:
 	for line in f: 
@@ -57,45 +39,18 @@ with open(cov_file) as f:
 			out[chrom][bc,strand][umi] = (starts, ends)
 
 
-#### functions to add info in out
 
 def unpack_startsends(chrom,bc_strand,umi):
 	global out
 	starts, ends = out[chrom][bc_strand][umi]
-	out[chrom][bc_strand][umi] = dict() #mdict.create("i32:i32") #dict()
+	out[chrom][bc_strand][umi] = dict()
 	for chunk in range(len(starts)):
 		for pos in range(starts[chunk], ends[chunk]):
-			out[chrom][bc_strand][umi][pos] = 0 #[0,0,0,0,0] #{1: 0, 2: 0, 3: 0, 4: 0, 0: 0} #[nt[i]] = 1
-
-def add2out(pos,nt_ind):
-	global out	
-	if isinstance(out[chrom][bc,strand][umi][pos], int):
-		if out[chrom][bc,strand][umi][pos] < 10:
-			out[chrom][bc,strand][umi][pos] = 10 + nt_ind
-		elif out[chrom][bc,strand][umi][pos]%10 == nt_ind:
-			out[chrom][bc,strand][umi][pos] += 10 #[nt_ind] += 1
-		else:
-			old = out[chrom][bc,strand][umi][pos]
-			out[chrom][bc,strand][umi][pos] = [0,0,0,0,0]
-			out[chrom][bc,strand][umi][pos][old%10] = old//10
-			out[chrom][bc,strand][umi][pos][nt_ind] += 1
-	else:
-		out[chrom][bc,strand][umi][pos][nt_ind] += 1
-
+			out[chrom][bc_strand][umi][pos] = [0,0,0,0,0] #{1: 0, 2: 0, 3: 0, 4: 0, 0: 0} #[nt[i]] = 1
 
 def pileup(pos, cigar, seq):
 	global out
 	pos_in = 0
-	if cigar=="93M":
-		for i in range(93):
-			if pos+i not in out[chrom][bc,strand][umi]:
-				continue
-			nt_ind = nt2int[seq[pos_in+i]]
-			if not nt_ind:
-				continue
-			add2out(pos+i, nt_ind)
-		return
-
 	cigar_ops = pattern.findall(cigar) 
 	if cigar_ops[0][1] == 'S':
 		pos_in += int(cigar_ops[0][0])
@@ -105,21 +60,14 @@ def pileup(pos, cigar, seq):
 		if op == 'M':
 			#coords[pos_in:(pos_in+length)] = range(pos, pos + length)
 			for i in range(length):
-				if pos+i not in out[chrom][bc,strand][umi]:
-					continue
-				nt_ind = nt2int[seq[pos_in+i]]
-				if not nt_ind:
-					continue
-				#out[chrom][bc,strand][umi][pos+i][nt_ind] += 1
-				add2out(pos+i, nt_ind)
-
+				if pos+i in out[chrom][bc,strand][umi]:
+					nt_ind = nt2int[seq[pos_in+i]]
+					out[chrom][bc,strand][umi][pos+i][nt_ind] += 1
 			pos_in += length
 		elif op == 'I':
 			pos_in += length
 			continue
 		pos += length
-
-#### functions for making a consensus from piled up sequences
 
 def leave_only_max(d):
 	#print(d)
@@ -271,9 +219,7 @@ for line in sys.stdin:
 	#if isinstance(out[chrom][bc,strand][umi], tuple):
 	#	unpack_startsends(bc,chrom,strand,umi)
 	pileup(start, cigar, seq)
-
-exit()
-
+	
 if chrom in out:
 	for bc_strand in out[chrom]:
 		for _umi in list(out[chrom][bc_strand].keys()):

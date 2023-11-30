@@ -1,3 +1,5 @@
+# NOT ONLY 0 and 16 in $2 !!!
+
 import sys
 from collections import defaultdict
 import re
@@ -182,6 +184,10 @@ l='ACGT'
 umi2code_d = dict(zip([''.join([a,b,c,d])
     for a in l for b in l for c in l for d in l],
     range(256)))
+ind = iter(range(16))
+for a in l:
+	for b in l:
+		umi2code_d[''.join([a,b])] = next(ind)
 
 for line in sys.stdin:
 	line = line.strip().split() 
