@@ -132,7 +132,7 @@ th_cov_e=5
 
 # allowed amount of mismatches between UMI reads at the position 
 # to consider it as transcription error:
-mm_allowed=1 
+mm_allowed=1
 # still, some part could be due to allele differences,
 # although most of the samples are done on homozygous organisms.
 # also, some positions could be more prone to transcription errors than other,

@@ -239,88 +239,19 @@ def record_errorrate(address): #er,
 				print(bc, len_cov[bc][0]/len_cov[bc][1], *len_cov[bc], file = f) #errorRate
 
 
-chrom_old=''
-pattern = re.compile(r'(\d+)([MIDNS])') 
-nt2int = {"N":0, "A":1,"C":2,"T":3,"G":4}
-int2nt = {v: k for k, v in nt2int.items()}
-
-len_cov = dict() 
-
-l='ACGT'
-umi2code_d = dict(zip([''.join([a,b,c,d])
-    for a in l for b in l for c in l for d in l],
-    range(256)))
-ind = iter(range(16))
-for a in l:
-	for b in l:
-		umi2code_d[''.join([a,b])] = next(ind)
-
-
-for line in sys.stdin:
-	line = line.strip().split() #"\t"
-	#if line[2]!="chr1" or line[-2]!="CB:Z:ACACAGTAGAGAGGGC" :
-	#	continue
-
-
-	# if reading from reads.txt
-	#bc, chr_str, umi, start, cigar, seq, _ = line
-	#chrom, strand = chr_str.split('_')
-	#seq = list(seq)
-	#start = int(start)
-	#strand = int(strand)
-	#start_cigar = '_'.join([start, cigar])
-	#if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
-	#	print(umi)
-	#	continue
-	#if False: # if reading from reads.txt
-	if line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[4]!="255" or line[2]=="chrM" or int(line[1])>=256:
-		continue
-	chrom = line[2]
-	#if chrom not in chroms:
-	#	continue
-	#chrom = chroms[chrom]
-	bc = line[-2] ; umi= line[-1] ; strand = int(line[1][0])
-	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] + max_chr_len # max size of chr in mice, so it would not intersect with pos after umi_consensus in out
-
-	if chrom != chrom_old:
-		if chrom_old:
-			#print('here', len(out[chrom_old]))
-			for bc_strand in out[chrom_old]:
-				#x = out[chrom_old][bc_strand] # would be the same dict, no
-				for _umi in list(out[chrom_old][bc_strand].keys()):
-					umi_consensus(bc_strand, chrom_old, _umi) # _bc _chr _umi
-				variance(bc_strand, chrom_old)
-			record_substitutions(address_subs, chrom_old)
-			del out[chrom_old]
-		chrom_old = chrom
-		#for bc_strand in out[chrom]:
-		#	for _umi in out[chrom][bc_strand]:
-		unpack_startsends(chrom) #, bc_strand, _umi)
-		#exit()
-
-	#if isinstance(out[chrom][bc,strand][umi], tuple):
-	#	unpack_startsends(bc,chrom,strand,umi)
-
-	if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
-		continue
-	#print(umi)
-
-	start = int(line[3]); cigar = line[5]
-	seq = line[9] # list(line[9]) # [nt2int[i] for i in list(line[9])] 
-	# but is it better? strings from different lists are probably 
-	# the same objects, meaning that "A" from all its positions 
-	# in all seqs would take total 64 bytes
-
-	pileup(start, cigar, seq)
-
-#print(out)
-for chrom in out:
+def across_chrom(chrom):
+	global out
+	#for chrom in out:
+	print("chrom",chrom)
 	for bc_strand in out[chrom]:
+		print("bc strand",bc_strand)
 		for umi in list(out[chrom][bc_strand].keys()):
+			print("umi",umi)
 			seqs = str(out[chrom][bc_strand][umi][1], encoding="utf-8")
 			seqs = [i.split(":") for i in seqs.split(",")][:-1]
 			seqs = [[int(i[0]),i[1]] for i in seqs]
 			interm_dict = dict()
+			print(interm_dict)
 			#print("seqs",seqs)
 			for s in seqs:
 				if s[0] not in interm_dict:
@@ -493,6 +424,84 @@ for chrom in out:
 			out[chrom][bc_strand][start] = ref
 			print(start, ref)
 		#print(out)
+
+
+chrom_old=''
+pattern = re.compile(r'(\d+)([MIDNS])') 
+nt2int = {"N":0, "A":1,"C":2,"T":3,"G":4}
+int2nt = {v: k for k, v in nt2int.items()}
+
+len_cov = dict() 
+
+l='ACGT'
+umi2code_d = dict(zip([''.join([a,b,c,d])
+    for a in l for b in l for c in l for d in l],
+    range(256)))
+ind = iter(range(16))
+for a in l:
+	for b in l:
+		umi2code_d[''.join([a,b])] = next(ind)
+
+
+for line in sys.stdin:
+	line = line.strip().split() #"\t"
+	#if line[2]!="chr1" or line[-2]!="CB:Z:ACACAGTAGAGAGGGC" :
+	#	continue
+
+
+	# if reading from reads.txt
+	#bc, chr_str, umi, start, cigar, seq, _ = line
+	#chrom, strand = chr_str.split('_')
+	#seq = list(seq)
+	#start = int(start)
+	#strand = int(strand)
+	#start_cigar = '_'.join([start, cigar])
+	#if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
+	#	print(umi)
+	#	continue
+	#if False: # if reading from reads.txt
+	if line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[4]!="255" or line[2]=="chrM" or int(line[1])>=256:
+		continue
+	chrom = line[2]
+	#if chrom not in chroms:
+	#	continue
+	#chrom = chroms[chrom]
+	bc = line[-2] ; umi= line[-1] ; strand = int(line[1][0])
+	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] + max_chr_len # max size of chr in mice, so it would not intersect with pos after umi_consensus in out
+
+	if chrom != chrom_old:
+		if chrom_old:
+			#print('here', len(out[chrom_old]))
+			across_chrom(chrom_old)
+			#for bc_strand in out[chrom_old]:
+			#	#x = out[chrom_old][bc_strand] # would be the same dict, no
+			#	for _umi in list(out[chrom_old][bc_strand].keys()):
+			#		umi_consensus(bc_strand, chrom_old, _umi) # _bc _chr _umi
+			#	variance(bc_strand, chrom_old)
+			#record_substitutions(address_subs, chrom_old)
+			del out[chrom_old]
+		chrom_old = chrom
+		#for bc_strand in out[chrom]:
+		#	for _umi in out[chrom][bc_strand]:
+		unpack_startsends(chrom) #, bc_strand, _umi)
+		#exit()
+
+	#if isinstance(out[chrom][bc,strand][umi], tuple):
+	#	unpack_startsends(bc,chrom,strand,umi)
+
+	if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
+		continue
+	#print(umi)
+
+	start = int(line[3]); cigar = line[5]
+	seq = line[9] # list(line[9]) # [nt2int[i] for i in list(line[9])] 
+	# but is it better? strings from different lists are probably 
+	# the same objects, meaning that "A" from all its positions 
+	# in all seqs would take total 64 bytes
+
+	pileup(start, cigar, seq)
+
+#print(out)
 
 exit()
 

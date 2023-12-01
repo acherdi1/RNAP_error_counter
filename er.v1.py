@@ -4,7 +4,7 @@ import re
 max_chr_len = 195154279
 dup_min = int(sys.argv[1]) #4
 cov_min = int(sys.argv[2]) #5
-vars_exp = int(sys.argv[3]) #2
+vars_exp = int(sys.argv[3])+1 #2
 #work_dir = sys.argv[1]
 #input_file = sys.argv[4] #'/'.join([work_dir, "reads.txt"])
 #bcumis_file= sys.argv[5] #'/'.join([work_dir,"bcumi_covd.txt"])
