@@ -143,12 +143,6 @@ def proc(chrom):
         del out[bc][chrom]
 
 
-# out = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [int(), str()] ))) #list() # [int(), str()] #, tuple()
-# out_def=defaultdict(lambda: defaultdict(lambda: [int(), str()] ))
-# out = defaultdict(lambda: out_def)
-out = dict()
-
-
 def add2out(bc, umi, strand, start_cigar):
     global out
     if bc in out:
@@ -164,23 +158,6 @@ def add2out(bc, umi, strand, start_cigar):
         out[bc] = {umi: {strand: [1, start_cigar]}}
 
 
-pattern = re.compile(r'(\d+)([MIDNS])')
-
-dup_min = int(sys.argv[1])  # 5
-cov_min = int(sys.argv[2])  # 5
-
-filt_bcs = sys.argv[3]
-bcumis = dict()
-keeper = io.StringIO()
-keeper.write(';')
-keeper_ind = 1
-with open(filt_bcs) as f:
-    for line in f.readlines():
-        bc = line.strip()
-        bcumis[''.join(['CB:Z:', bc])] = mdict.create("i32:i32")
-out_file = sys.argv[4]
-
-
 def bad2bcumis(bc, umi):
     global bcumis
     bcumis[bc][umi] = 0
@@ -193,53 +170,75 @@ def good2bcumis(bc, umi, value):
     keeper_ind += 1
 
 
-chrom_old = ''
-l = 'ACGT'
-umi2code_d = dict(zip([''.join([a, b, c, d])
-                       for a in l for b in l for c in l for d in l],
-                      range(256)))
-ind = iter(range(16))
-for a in l:
-    for b in l:
-        umi2code_d[''.join([a, b])] = next(ind)
+if __name__ == "__main__":
+    # out = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [int(), str()] ))) #list() # [int(), str()] #, tuple()
+    # out_def=defaultdict(lambda: defaultdict(lambda: [int(), str()] ))
+    # out = defaultdict(lambda: out_def)
+    out = dict()
 
-for line in sys.stdin:
-    line = line.strip().split()
-    if (line[-2] not in bcumis or line[2] == "chrM"):
-        continue
+    pattern = re.compile(r'(\d+)([MIDNS])')
 
-    bc = line[-2];
-    umi = line[-1]
-    umi = umi2code_d[umi[5:9]] * 1000000 + umi2code_d[umi[9:13]] * 1000 + umi2code_d[umi[13:17]]
+    dup_min = int(sys.argv[1])  # 5
+    cov_min = int(sys.argv[2])  # 5
 
-    if umi in bcumis[bc]:
-        bad2bcumis(bc, umi)
-        continue
+    filt_bcs = sys.argv[3]
+    bcumis = dict()
+    keeper = io.StringIO()
+    keeper.write(';')
+    keeper_ind = 1
+    with open(filt_bcs) as f:
+        for line in f.readlines():
+            bc = line.strip()
+            bcumis[''.join(['CB:Z:', bc])] = mdict.create("i32:i32")
+    out_file = sys.argv[4]
 
-    strand = line[1][0]
-    if (bc in out) and (umi in out[bc]) and (strand not in out[bc][umi]):
-        bad2bcumis(bc, umi)
-        continue
+    chrom_old = ''
+    l = 'ACGT'
+    umi2code_d = dict(zip([''.join([a, b, c, d])
+                           for a in l for b in l for c in l for d in l],
+                          range(256)))
+    ind = iter(range(16))
+    for a in l:
+        for b in l:
+            umi2code_d[''.join([a, b])] = next(ind)
 
-    chrom = line[2]
-    start_cigar = '_'.join([line[3], line[5]])
+    for line in sys.stdin:
+        line = line.strip().split()
+        if (line[-2] not in bcumis or line[2] == "chrM"):
+            continue
 
-    if chrom != chrom_old:
-        if chrom_old:
-            proc(chrom_old)
-            out = dict()
-        # out = defaultdict(lambda: out_def)
-        chrom_old = chrom
-    add2out(bc, umi, strand, start_cigar)
-# out[bc][umi][strand][0] += 1
-# out[bc][umi][strand][1] = ','.join([out[bc][umi][strand][1], start_cigar])
-proc(chrom)
+        bc = line[-2];
+        umi = line[-1]
+        umi = umi2code_d[umi[5:9]] * 1000000 + umi2code_d[umi[9:13]] * 1000 + umi2code_d[umi[13:17]]
 
-keeper.seek(0)
-result = keeper.read().split(';')
-with open(out_file, 'w') as f:
-    for bc in bcumis:
-        for umi in bcumis[bc]:
-            if bcumis[bc][umi]:
-                print(bc, umi, result[bcumis[bc][umi]], file=f)
-exit()
+        if umi in bcumis[bc]:
+            bad2bcumis(bc, umi)
+            continue
+
+        strand = line[1][0]
+        if (bc in out) and (umi in out[bc]) and (strand not in out[bc][umi]):
+            bad2bcumis(bc, umi)
+            continue
+
+        chrom = line[2]
+        start_cigar = '_'.join([line[3], line[5]])
+
+        if chrom != chrom_old:
+            if chrom_old:
+                proc(chrom_old)
+                out = dict()
+            # out = defaultdict(lambda: out_def)
+            chrom_old = chrom
+        add2out(bc, umi, strand, start_cigar)
+    # out[bc][umi][strand][0] += 1
+    # out[bc][umi][strand][1] = ','.join([out[bc][umi][strand][1], start_cigar])
+    proc(chrom)
+
+    keeper.seek(0)
+    result = keeper.read().split(';')
+    with open(out_file, 'w') as f:
+        for bc in bcumis:
+            for umi in bcumis[bc]:
+                if bcumis[bc][umi]:
+                    print(bc, umi, result[bcumis[bc][umi]], file=f)
+    exit()
