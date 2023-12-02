@@ -96,7 +96,7 @@ def intersect(startss_endss, th):
 def proc(chrom, dup_min):
     global out
     for bc in out:
-        for umi in list(out[bc].keys()):  # changed size bc of +out[bc][chrom]
+        for umi in list(out[bc].keys()):
             if len(out[bc][umi]) > 1:
                 bad2bcumis(bc, umi)
                 continue
@@ -106,8 +106,7 @@ def proc(chrom, dup_min):
                 continue
             starts_ends_dups = list()
             start_cigars = out[bc][umi][strand][1]
-            start_cigars = start_cigars.split(
-                ',')  # [1::] #ONLY IF out defaultdict str(), ','.joni(out, first start_cigar) => ",.." => empty first, but we switched to normal dict!
+            start_cigars = start_cigars.split(',')
             for start_cigar in start_cigars:
                 starts_ends_dup = cigar2pos(start_cigar)
                 starts_ends_dups.append(starts_ends_dup)
@@ -166,8 +165,7 @@ def proc(chrom, dup_min):
         del out[bc][chrom]
 
 
-def add2out(bc, umi, strand, start_cigar):
-    global out
+def add2out(bc, umi, strand, start_cigar, out):
     if bc in out:
         if umi in out[bc]:
             if strand in out[bc][umi]:
@@ -242,7 +240,7 @@ if __name__ == "__main__":
                 proc(chromosome_old, args.dup_min)
                 out = {}
             chromosome_old = chrom
-        add2out(barcode, hashed_umi, strand, start_cigar)
+        add2out(barcode, hashed_umi, strand, start_cigar, out)
 
     proc(chrom, args.dup_min)
 
@@ -253,4 +251,3 @@ if __name__ == "__main__":
             for hashed_umi in bcumis[barcode]:
                 if bcumis[barcode][hashed_umi]:
                     print(barcode, hashed_umi, result[bcumis[barcode][hashed_umi]], file=f)
-    exit()
