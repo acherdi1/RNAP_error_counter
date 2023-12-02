@@ -6,6 +6,9 @@ import re
 import bisect
 from microdict import mdict
 import io
+import argparse
+
+cigar_pattern = re.compile(r'(\d+)([MIDNS])')
 
 
 def cigar2pos(start_cigar):
@@ -13,9 +16,9 @@ def cigar2pos(start_cigar):
     pos = int(pos)
     if cigar == "93M":
         return ([pos], [pos + 92])
-    starts = list();
-    ends = list()
-    cigar_ops = pattern.findall(cigar)
+    starts = []
+    ends = []
+    cigar_ops = cigar_pattern.findall(cigar)
     if cigar_ops[0][1] == 'S':
         cigar_ops = cigar_ops[1:]
     for length, op in cigar_ops:
@@ -33,10 +36,10 @@ def find_intersect(starts, ends, th):
     n = len(starts)
     starts.append(ends[-1] + 1)
 
-    result_starts = [];
+    result_starts = []
     result_ends = []
-    i = 0;
-    j = 0;
+    i = 0
+    j = 0
     overlap_count = 0
 
     while i <= n and j < n:
@@ -59,9 +62,9 @@ def find_intersect(starts, ends, th):
         return
 
 
-def íntersect(startss_endss, th):
-    starts = list();
-    ends = list()
+def intersect(startss_endss, th):
+    starts = []
+    ends = []
     for starts_ends in startss_endss:
         for start in starts_ends[0]:
             bisect.insort(starts, start)
@@ -88,7 +91,7 @@ def proc(chrom):
             for start_cigar in start_cigars:
                 starts_ends_dup = cigar2pos(start_cigar)
                 starts_ends_dups.append(starts_ends_dup)
-            starts_ends_umi = íntersect(starts_ends_dups, th=dup_min)  # -1
+            starts_ends_umi = intersect(starts_ends_dups, th=dup_min)  # -1
             if starts_ends_umi:
                 if chrom in out[bc]:
                     out[bc][chrom][umi] = (strand, starts_ends_umi)
@@ -110,9 +113,9 @@ def proc(chrom):
         for umi in out[bc][chrom]:
             strand, starts_ends_umi = out[bc][chrom][umi]
             starts_ends_umis[strand].append(starts_ends_umi)
-        starts_ends_chrbc = dict()  # [None, None] #
+        starts_ends_chrbc = {}
         for strand in starts_ends_umis:
-            starts_ends_chrbc[strand] = íntersect(starts_ends_umis[strand], th=cov_min)  # -1
+            starts_ends_chrbc[strand] = intersect(starts_ends_umis[strand], th=cov_min)  # -1
 
             if not starts_ends_chrbc[strand]:
                 for umi in list(out[bc][chrom].keys()):
@@ -122,7 +125,7 @@ def proc(chrom):
                         continue
         for umi in list(out[bc][chrom].keys()):
             strand, starts_ends_umi = out[bc][chrom][umi]
-            coords = íntersect([starts_ends_chrbc[strand], starts_ends_umi], th=2)
+            coords = intersect([starts_ends_chrbc[strand], starts_ends_umi], th=2)
             if coords:
                 out[bc][chrom][umi] = (strand, coords)
             else:
@@ -171,26 +174,26 @@ def good2bcumis(bc, umi, value):
 
 
 if __name__ == "__main__":
-    # out = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [int(), str()] ))) #list() # [int(), str()] #, tuple()
-    # out_def=defaultdict(lambda: defaultdict(lambda: [int(), str()] ))
-    # out = defaultdict(lambda: out_def)
-    out = dict()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('filt_bcs')
+    parser.add_argument('out_file')
+    parser.add_argument('-dup_min', type=int, default=5)
+    parser.add_argument('-cov_min', type=int, default=5)
+    args = parser.parse_args()
 
-    pattern = re.compile(r'(\d+)([MIDNS])')
+    dup_min = args.dup_min  # 5
+    cov_min = args.cov_min  # 5
 
-    dup_min = int(sys.argv[1])  # 5
-    cov_min = int(sys.argv[2])  # 5
+    out = {}
 
-    filt_bcs = sys.argv[3]
-    bcumis = dict()
+    bcumis = {}
     keeper = io.StringIO()
     keeper.write(';')
     keeper_ind = 1
-    with open(filt_bcs) as f:
+    with open(args.filt_bcs) as f:
         for line in f.readlines():
             bc = line.strip()
             bcumis[''.join(['CB:Z:', bc])] = mdict.create("i32:i32")
-    out_file = sys.argv[4]
 
     chrom_old = ''
     l = 'ACGT'
@@ -207,7 +210,7 @@ if __name__ == "__main__":
         if (line[-2] not in bcumis or line[2] == "chrM"):
             continue
 
-        bc = line[-2];
+        bc = line[-2]
         umi = line[-1]
         umi = umi2code_d[umi[5:9]] * 1000000 + umi2code_d[umi[9:13]] * 1000 + umi2code_d[umi[13:17]]
 
@@ -226,17 +229,15 @@ if __name__ == "__main__":
         if chrom != chrom_old:
             if chrom_old:
                 proc(chrom_old)
-                out = dict()
-            # out = defaultdict(lambda: out_def)
+                out = {}
             chrom_old = chrom
         add2out(bc, umi, strand, start_cigar)
-    # out[bc][umi][strand][0] += 1
-    # out[bc][umi][strand][1] = ','.join([out[bc][umi][strand][1], start_cigar])
+
     proc(chrom)
 
     keeper.seek(0)
     result = keeper.read().split(';')
-    with open(out_file, 'w') as f:
+    with open(args.out_file, 'w') as f:
         for bc in bcumis:
             for umi in bcumis[bc]:
                 if bcumis[bc][umi]:
