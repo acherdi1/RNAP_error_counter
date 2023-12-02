@@ -9,6 +9,26 @@ import io
 import argparse
 
 cigar_pattern = re.compile(r'(\d+)([MIDNS])')
+DNA_BASES = ('A', 'C', 'G', 'T')
+
+umi_to_code = dict(zip([''.join([base_1, base_2, base_3, base_4])
+                        for base_1 in DNA_BASES for base_2 in DNA_BASES for base_3 in DNA_BASES for base_4 in
+                        DNA_BASES],
+                       range(256)))
+ind = iter(range(16))
+for a in DNA_BASES:
+    for b in DNA_BASES:
+        umi_to_code[''.join([a, b])] = next(ind)
+
+
+def hash_umi(umi: str) -> int:
+    """
+    :param umi: String with UMI; it's assumed that the actual UMI has length 12, and that the first
+    5 characters in variable umi is the samtools prefix ('UB:Z:'). Therefore, the variable umi is expected
+    to have a length of 5+12 = 17
+    :return: int representing the hash of UMI
+    """
+    return umi_to_code[umi[5:9]] * 1000000 + umi_to_code[umi[9:13]] * 1000 + umi_to_code[umi[13:17]]
 
 
 def cigar2pos(start_cigar):
@@ -73,7 +93,7 @@ def intersect(startss_endss, th):
     return find_intersect(starts, ends, th)
 
 
-def proc(chrom):
+def proc(chrom, dup_min):
     global out
     for bc in out:
         for umi in list(out[bc].keys()):  # changed size bc of +out[bc][chrom]
@@ -181,8 +201,7 @@ if __name__ == "__main__":
     parser.add_argument('-cov_min', type=int, default=5)
     args = parser.parse_args()
 
-    dup_min = args.dup_min  # 5
-    cov_min = args.cov_min  # 5
+    cov_min = args.cov_min
 
     out = {}
 
@@ -190,56 +209,48 @@ if __name__ == "__main__":
     keeper = io.StringIO()
     keeper.write(';')
     keeper_ind = 1
-    with open(args.filt_bcs) as f:
-        for line in f.readlines():
-            bc = line.strip()
-            bcumis[''.join(['CB:Z:', bc])] = mdict.create("i32:i32")
+    with open(args.filt_bcs) as file:
+        for line in file.readlines():
+            barcode = line.strip()
+            bcumis[''.join(['CB:Z:', barcode])] = mdict.create("i32:i32")
 
-    chrom_old = ''
-    l = 'ACGT'
-    umi2code_d = dict(zip([''.join([a, b, c, d])
-                           for a in l for b in l for c in l for d in l],
-                          range(256)))
-    ind = iter(range(16))
-    for a in l:
-        for b in l:
-            umi2code_d[''.join([a, b])] = next(ind)
+    chromosome_old = ''
 
     for line in sys.stdin:
         line = line.strip().split()
-        if (line[-2] not in bcumis or line[2] == "chrM"):
+        if line[-2] not in bcumis or line[2] == "chrM":
             continue
 
-        bc = line[-2]
+        barcode = line[-2]
         umi = line[-1]
-        umi = umi2code_d[umi[5:9]] * 1000000 + umi2code_d[umi[9:13]] * 1000 + umi2code_d[umi[13:17]]
+        hashed_umi = hash_umi(umi)
 
-        if umi in bcumis[bc]:
-            bad2bcumis(bc, umi)
+        if hashed_umi in bcumis[barcode]:
+            bad2bcumis(barcode, hashed_umi)
             continue
 
         strand = line[1][0]
-        if (bc in out) and (umi in out[bc]) and (strand not in out[bc][umi]):
-            bad2bcumis(bc, umi)
+        if (barcode in out) and (hashed_umi in out[barcode]) and (strand not in out[barcode][hashed_umi]):
+            bad2bcumis(barcode, hashed_umi)
             continue
 
         chrom = line[2]
         start_cigar = '_'.join([line[3], line[5]])
 
-        if chrom != chrom_old:
-            if chrom_old:
-                proc(chrom_old)
+        if chrom != chromosome_old:
+            if chromosome_old:
+                proc(chromosome_old, args.dup_min)
                 out = {}
-            chrom_old = chrom
-        add2out(bc, umi, strand, start_cigar)
+            chromosome_old = chrom
+        add2out(barcode, hashed_umi, strand, start_cigar)
 
-    proc(chrom)
+    proc(chrom, args.dup_min)
 
     keeper.seek(0)
     result = keeper.read().split(';')
     with open(args.out_file, 'w') as f:
-        for bc in bcumis:
-            for umi in bcumis[bc]:
-                if bcumis[bc][umi]:
-                    print(bc, umi, result[bcumis[bc][umi]], file=f)
+        for barcode in bcumis:
+            for hashed_umi in bcumis[barcode]:
+                if bcumis[barcode][hashed_umi]:
+                    print(barcode, hashed_umi, result[bcumis[barcode][hashed_umi]], file=f)
     exit()
