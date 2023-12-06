@@ -27,6 +27,12 @@ cov_file = sys.argv[4] #'interm4'
 address_subs= sys.argv[5] #'/'.join([work_dir, "subs.txt"])
 address_er= sys.argv[6] #'/'.join([work_dir, "er.txt"])
 
+try:
+	print_var=sys.argv[7].split(" ")
+	print_var[1] = int(print_var[1])
+except:
+	print_var=0
+
 with open(address_subs, 'w') as f:
 	pass
 
@@ -83,6 +89,9 @@ def unpack_startsends(chrom): #,bc_strand,umi):
 			umi = int(umi) + max_chr_len
 			starts = [int(i) for i in starts.strip('] ').split(', ')]
 			ends = [int(i) for i in ends.strip('] ').split(', ')]
+			for i in range(len(starts)):
+				if starts[i]<=72712169 and ends[i]>=72712169:
+					print(bc, umi, chrom, strand, starts, ends)
 			if chrom not in out:
 				out[chrom] = {(bc,strand):{umi:[(starts, ends), b""]}} # dict()
 			elif (bc,strand) not in out[chrom]:
@@ -95,23 +104,25 @@ def unpack_startsends(chrom): #,bc_strand,umi):
 			#		out[chrom][bc,strand][umi][pos] = b""
 
 
-
-
 def pileup(pos, cigar, seq):
 	global out
 	pos_in = 0
+	#print()
+	#print("pileup",pos,cigar,seq)
 	cigar_ops = pattern.findall(cigar) 
 	if cigar_ops[0][1] == 'S':
 		pos_in += int(cigar_ops[0][0])
 		cigar_ops = cigar_ops[1:]
 	for length, op in cigar_ops:
+		#print(length,op)
 		length = int(length)
 		if op == 'M':
 			#coords[pos_in:(pos_in+length)] = range(pos, pos + length)
 			#out[chrom][bc,strand][umi][1] += bytes("".join([pos, "-", pos+length, ","]), encoding='utf-8')
 			#out[chrom][bc,strand][umi][2] += bytes("".join([seq[pos_in:pos_in+i], ","]), encoding='utf-8')
-			coord = [pos, pos+length]
+			coord = [pos, pos+length-1]
 			starts, ends = out[chrom][bc,strand][umi][0]
+			#print("M", coord,starts,ends)
 
 			for se_ind in range(len(starts)):
 				#print(se_ind)
@@ -157,6 +168,7 @@ def pileup(pos, cigar, seq):
 			pos_in += length
 			continue
 		pos += length
+		#print(out[chrom][bc,strand][umi][1])
 	out[chrom][bc,strand][umi][1] += b" "
 	#out[chrom][bc,strand][umi][2] += b" "
 
@@ -230,7 +242,7 @@ def record_substitutions(address, chrom):
 	with open(address, "a") as f:
 		for bc_strand in out[chrom]:
 			for pos in out[chrom][bc_strand]:
-				print(*bc_strand, chrom, pos, *out[chrom][bc_strand][pos], file = f)
+				print(bc_strand[0][5:], bc_strand[1], chrom, pos, *out[chrom][bc_strand][pos], file = f)
 
 def record_errorrate(address): #er, 
 	with open(address, "w") as f:
@@ -242,16 +254,20 @@ def record_errorrate(address): #er,
 def across_chrom(chrom):
 	global out
 	#for chrom in out:
-	print("chrom",chrom)
+	#print("chrom",chrom)
 	for bc_strand in out[chrom]:
-		print("bc strand",bc_strand)
+		#print("bc strand",bc_strand)
+		if bc_strand[0] not in cell_cov:
+			cell_cov[bc_strand[0]]=[0,0,0]
 		for umi in list(out[chrom][bc_strand].keys()):
-			print("umi",umi)
+			#print("umi",umi)
+			#print(out[chrom][bc_strand][umi][1])
 			seqs = str(out[chrom][bc_strand][umi][1], encoding="utf-8")
+			#print("seqs", seqs)
 			seqs = [i.split(":") for i in seqs.split(",")][:-1]
 			seqs = [[int(i[0]),i[1]] for i in seqs]
 			interm_dict = dict()
-			print(interm_dict)
+			#print("seqs2", seqs)
 			#print("seqs",seqs)
 			for s in seqs:
 				if s[0] not in interm_dict:
@@ -280,7 +296,16 @@ def across_chrom(chrom):
 				ref = ""
 				#print("pos seqs",pos, seqs)
 				here = [ i[k[-1]] for k in seqs for i in k[:-1]]
-				#print(here)
+				#if pos==5801941:
+				if print_var and pos==print_var[1]:
+					#print(umi, pos, here)
+					print(''.join([
+						code2umi[(umi-max_chr_len)//1000000], 
+						code2umi[(umi-max_chr_len)%1000000//1000], 
+						code2umi[(umi-max_chr_len)%1000]]), 
+					pos, ''.join([''.join(s) for s in [(str(here.count(i)),i) for i in set(here)]]))					
+
+
 
 				if len(set(here)) == 1:
 					ref += here[0]
@@ -289,6 +314,7 @@ def across_chrom(chrom):
 					for item in here:
 						b[item] = b.get(item, 0) + 1
 					#print(b)
+					#if max(b.values()) >= dup_min:	
 					ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
 				#print(ref)
 
@@ -302,6 +328,14 @@ def across_chrom(chrom):
 					#print(interm_dict)
 					here = [i[k[-1]] for k in seqs for i in k[:-1] if len(i)>k[-1]]
 					#print(here, set(here))
+					#if pos==5801941:
+					if print_var and pos==print_var[1]:
+						print(''.join([
+							code2umi[(umi-max_chr_len)//1000000], 
+							code2umi[(umi-max_chr_len)%1000000//1000], 
+							code2umi[(umi-max_chr_len)%1000]]), 
+						pos, 
+						''.join([''.join(s) for s in [(str(here.count(i)),i) for i in set(here)]]))					
 					if not here:
 						break
 					if len(set(here)) == 1:
@@ -310,7 +344,8 @@ def across_chrom(chrom):
 						b = {}
 						for item in here:
 							b[item] = b.get(item, 0) + 1
-						#print(b)
+						#print(max(b.values()))
+						#if max(b.values()) >= dup_min:	
 						ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
 					#print(ref)
 					for seq in seqs:
@@ -326,7 +361,7 @@ def across_chrom(chrom):
 					#	out[chrom][bc_strand][103826670]=['GGTACTTGT'] #GAGCCAT
 				else:
 					out[chrom][bc_strand][start].append(ref)
-				#print(interm_dict)
+				#print("end ID", interm_dict)
 				if not interm_dict:
 					del out[chrom][bc_strand][umi]
 					break
@@ -361,12 +396,45 @@ def across_chrom(chrom):
 			#print(here)
 			s_here = set(here)
 			if len(s_here) == 1:
-				ref = ''.join([ref, str(len(here)),here[0]])
+				#ref = ''.join([ref, str(len(here)),here[0]])
+				cell_cov[bc_strand[0]][0] += len(here)
+				cell_cov[bc_strand[0]][1] += 1
+				#print(here)
 			else:
 				b = {}
 				for item in here:
 					b[item] = b.get(item, 0) + 1
-				ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
+				#ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
+				pcr_ers=list()
+				for pair in list(b.items()):
+					#print(pair)
+					if pair[0].startswith("("):
+						#print("here")
+						pcr_ers.append(''.join([str(pair[1]),pair[0]]))
+						pcr_vars = pattern_pcr_vars.findall(pair[0])
+						pcr_vars = [(int(i[0]), i[1]) for i in pcr_vars]
+						#print("pcr_vars",pcr_vars)
+						maxx = (0,'')
+						for pcr_var in pcr_vars:
+							if pcr_var[0]>maxx[0]:
+								maxx = pcr_var
+						#print("b maxx", b, maxx)
+						if maxx[0] > dup_min and ((2*maxx[0]-sum([i[0] for i in pcr_vars]))>=(maxx[0]/2)):
+							b[maxx[1]] = b.get(maxx[1],0) + 1 #int(maxx[0])
+						del b[pair[0]]
+				#if len(b)==1:
+				#	ref=''.join([ref,*[str(v)+k for k,v in b.items()] ])
+				#else:
+				#	ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
+
+				if b and max(b.values())>=cov_min:
+					cell_cov[bc_strand[0]][0] += sum(b.values())
+					cell_cov[bc_strand[0]][1] += 1
+					#print("h",b)
+					#print(bc_strand[0][5:], bc_strand[1], chrom, pos, *[str(v)+k for k,v in b.items()])
+					if (len(b)==2 and min(b.values())==1) or (print_var and pos==print_var[1] and chrom==print_var[0]):
+						print(bc_strand[0][5:], chrom, bc_strand[1], pos, *[k for k,v in sorted(b.items(), key=lambda item: item[1])], ''.join([str(v)+k for k,v in b.items()]), ''.join(pcr_ers)) # ref.rstrip("(")[:-1]
+						cell_cov[bc_strand[0]][2]+=1
 			#print(ref)
 			#break
 			#for seq in seqs:
@@ -400,9 +468,17 @@ def across_chrom(chrom):
 				#break
 				if not here:
 					break
+				if len(here)<cov_min:
+					print(chrom,bc_strand,pos)
+					exit()
+					continue
+				#print(here)
 				s_here = set(here)
 				if len(s_here) == 1:
-					ref = ''.join([ref, str(len(here)),here[0]])
+					#ref = ''.join([ref, str(len(here)),here[0]])
+					cell_cov[bc_strand[0]][0] += len(here)
+					cell_cov[bc_strand[0]][1] += 1
+					#print(here)
 				else:
 					#if any([i.startswith("(") for i in s_here ]):
 					#	print("!!!") 
@@ -415,32 +491,64 @@ def across_chrom(chrom):
 					for item in here:
 						b[item] = b.get(item, 0) + 1
 					#print(b)
-					ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
+					#ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
+					pcr_ers=list()
+					for pair in list(b.items()):
+						#print(pair)
+						if pair[0].startswith("("):
+							#print("here")
+							pcr_ers.append(''.join([str(pair[1]),pair[0]]))
+							pcr_vars = pattern_pcr_vars.findall(pair[0])
+							pcr_vars = [(int(i[0]), i[1]) for i in pcr_vars]
+							#print("pcr_vars",pcr_vars)
+							maxx = (0,'')
+							for pcr_var in pcr_vars:
+								if pcr_var[0]>maxx[0]:
+									maxx = pcr_var
+							#print("b maxx", b, maxx)
+							if maxx[0] >= dup_min and ((2*maxx[0]-sum([i[0] for i in pcr_vars]))>=(maxx[0]/2)):
+								b[maxx[1]] = b.get(maxx[1],0) + 1 #int(maxx[0])
+							del b[pair[0]]
+					#if len(b)==1:
+					#	ref=''.join([ref,*[str(v)+k for k,v in b.items()] ])
+					#else:
+					#	ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
+					#cell_cov[bc_strand]=cell_cov.get(bc_strand,0) + sum(b.values())
+					
+					if b and max(b.values())>=cov_min:
+						cell_cov[bc_strand[0]][0] += sum(b.values())
+						cell_cov[bc_strand[0]][1] += 1
+						#print(b)
+						if (len(b)==2 and min(b.values())==1) or (print_var and pos==print_var[1] and chrom==print_var[0]):
+							print(bc_strand[0][5:], chrom, bc_strand[1], pos, *[k for k,v in sorted(b.items(), key=lambda item: item[1], reverse=True)], ''.join([str(v)+k for k,v in b.items()]), ''.join(pcr_ers)) # ref.rstrip("(")[:-1]
+							cell_cov[bc_strand[0]][2]+=1
 				#print(ref)
 				#for seq in seqs:
 				#	seq[-1]+=1
 				#print(seqs)
 			#break
-			out[chrom][bc_strand][start] = ref
-			print(start, ref)
+			#out[chrom][bc_strand][start] = ref
+			#print(chrom, bc_strand, start, ref)
 		#print(out)
 
 
 chrom_old=''
 pattern = re.compile(r'(\d+)([MIDNS])') 
+pattern_pcr_vars = re.compile(r'(\d+)([ACTG])') 
 nt2int = {"N":0, "A":1,"C":2,"T":3,"G":4}
 int2nt = {v: k for k, v in nt2int.items()}
-
+cell_cov=dict()
 len_cov = dict() 
 
 l='ACGT'
 umi2code_d = dict(zip([''.join([a,b,c,d])
     for a in l for b in l for c in l for d in l],
     range(256)))
-ind = iter(range(16))
+ind = iter(range(257, 257+16))
 for a in l:
 	for b in l:
 		umi2code_d[''.join([a,b])] = next(ind)
+code2umi = {v: k for k, v in umi2code_d.items()}
 
 
 for line in sys.stdin:
@@ -462,7 +570,11 @@ for line in sys.stdin:
 	#if False: # if reading from reads.txt
 	if line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[4]!="255" or line[2]=="chrM" or int(line[1])>=256:
 		continue
+	#if not line[-2]=="CB:Z:ACTGATGCATGGAATA":
+	#	continue
 	chrom = line[2]
+	#if chrom!="chr1":
+	#	exit()
 	#if chrom not in chroms:
 	#	continue
 	#chrom = chroms[chrom]
@@ -470,7 +582,7 @@ for line in sys.stdin:
 	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] + max_chr_len # max size of chr in mice, so it would not intersect with pos after umi_consensus in out
 
 	if chrom != chrom_old:
-		if chrom_old:
+		if chrom_old and chrom_old in out:
 			#print('here', len(out[chrom_old]))
 			across_chrom(chrom_old)
 			#for bc_strand in out[chrom_old]:
@@ -502,6 +614,13 @@ for line in sys.stdin:
 	pileup(start, cigar, seq)
 
 #print(out)
+
+with open(address_er, "w") as f:
+	for bc in cell_cov:
+		print(bc[5:], 
+			round(cell_cov[bc][2]/cell_cov[bc][1], 8), 
+			*cell_cov[bc][::-1],
+			file=f)
 
 exit()
 

@@ -193,6 +193,8 @@ for line in sys.stdin:
 	line = line.strip().split() 
 	if (line[-2] not in bcumis or line[2]=="chrM"):
 		continue
+	#if line[-2] != "CB:Z:AAGTTCGTCATTGCGA":
+	#	continue
 
 	bc = line[-2] ; umi= line[-1] 
 	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] 
@@ -214,6 +216,7 @@ for line in sys.stdin:
 			proc(chrom_old)
 			out = dict()
 			#out = defaultdict(lambda: out_def)
+			#break
 		chrom_old = chrom 
 	add2out(bc, umi, strand, start_cigar)
 	#out[bc][umi][strand][0] += 1
