@@ -1,81 +1,19 @@
-# memory improvement: save BC as indices as in bcumi_dupd_cov.py
-
-
-# when len_cov is dict and counted out of sript:
-# time 458s
-# RAM 2.43GB
-
-# cov to str => RAM 2.42 , 
-#but comparison in strings one by one letter?
-# time 462s, neglectable increase
-
-
-#from collections import defaultdict
 import sys
 import re
-#from microdict import mdict
-#import numpy as np
 
-max_chr_len = 195154279
-dup_min = int(sys.argv[1]) #4
-cov_min = int(sys.argv[2]) #5
-vars_exp = int(sys.argv[3]) #2
-#work_dir = sys.argv[1]
-#input_file = sys.argv[4] #'/'.join([work_dir, "reads.txt"])
-#bcumis_file= sys.argv[5] #'/'.join([work_dir,"bcumi_covd.txt"])
-cov_file = sys.argv[4] #'interm4'
-address_subs= sys.argv[5] #'/'.join([work_dir, "subs.txt"])
-address_er= sys.argv[6] #'/'.join([work_dir, "er.txt"])
+dup_min = int(sys.argv[1])
+cov_min = int(sys.argv[2])
+vars_exp = int(sys.argv[3]) 
+cov_file = sys.argv[4] 
+address_er= sys.argv[5] 
 
 try:
-	print_var=sys.argv[7].split(" ")
+	print_var=sys.argv[6].split(" ")
 	print_var[1] = int(print_var[1])
 except:
 	print_var=0
 
-with open(address_subs, 'w') as f:
-	pass
-
-out = dict()
-
-#chroms = dict()
-#chrom_ind = 0
-
-# with open(cov_file) as f:
-# 	for line in f: 
-# 		line = line.strip()
-# 		info, starts, ends = line.split("[")
-# 		#bc, chrom, strand, umi = info.split()
-# 		bc, umi, chrom, strand = info.split()
-# 		strand = int(strand[0])
-# 		umi = int(umi) + max_chr_len
-# 		#if chrom not in chroms:
-# 		#	chroms[chrom] = chrom_ind
-# 		#	chrom_ind += 1
-# 		#chrom = chroms[chrom]
-# 		starts = [int(i) for i in starts.strip('] ').split(', ')]
-# 		ends = [int(i) for i in ends.strip('] ').split(', ')]
-# 		if chrom not in out:
-# 			out[chrom] = dict()
-# 		if (bc,strand) not in out[chrom]:
-# 			out[chrom][bc,strand] = {umi:(starts, ends)}
-# 		else:
-# 			out[chrom][bc,strand][umi] = (starts, ends)
-
-
-
-# def unpack_startsends(chrom,bc_strand,umi):
-# 	global out
-# 	starts, ends = out[chrom][bc_strand][umi]
-# 	out[chrom][bc_strand][umi] = dict()
-# 	#del out[chrom][bc_strand][umi]
-# 	#out[chrom][bc_strand][umi] = mdict.create("str:str", key_len=None, val_len=None)
-# 	for chunk in range(len(starts)):
-# 		for pos in range(starts[chunk], ends[chunk]):
-# 			#out[chrom][bc_strand][umi][pos] = [0,0,0,0,0] #{1: 0, 2: 0, 3: 0, 4: 0, 0: 0} #[nt[i]] = 1
-# 			out[chrom][bc_strand][umi][pos] = b""
-
-def unpack_startsends(chrom): #,bc_strand,umi):
+def unpack_startsends(chrom): 
 	global out
 	with open(cov_file) as f:
 		chrom_check = chrom + " "
@@ -85,13 +23,18 @@ def unpack_startsends(chrom): #,bc_strand,umi):
 			line = line.strip()
 			info, starts, ends = line.split("[")
 			bc, umi, chrom, strand = info.split()
+			if not bc.startswith("CB"):
+				bc = ''.join(["CB:Z:",bc])
 			strand = int(strand[0])
-			umi = int(umi) + max_chr_len
+			if umi[0].isalpha():
+				umi = umi2code_d[umi[0:4]]*1000000 + umi2code_d[umi[4:8]]*1000 + umi2code_d[umi[8:12]] + max_chr_len # max size of chr in mice, so it would not intersect with pos after umi_consensus in out
+			else:
+				umi = int(umi) + max_chr_len
 			starts = [int(i) for i in starts.strip('] ').split(', ')]
 			ends = [int(i) for i in ends.strip('] ').split(', ')]
-			for i in range(len(starts)):
-				if starts[i]<=72712169 and ends[i]>=72712169:
-					print(bc, umi, chrom, strand, starts, ends)
+			#for i in range(len(starts)):
+			#	if starts[i]<=72712169 and ends[i]>=72712169:
+			#		print(bc, umi, chrom, strand, starts, ends)
 			if chrom not in out:
 				out[chrom] = {(bc,strand):{umi:[(starts, ends), b""]}} # dict()
 			elif (bc,strand) not in out[chrom]:
@@ -99,40 +42,23 @@ def unpack_startsends(chrom): #,bc_strand,umi):
 			else:
 				out[chrom][bc,strand][umi] = [(starts, ends), b""] #(starts, ends)
 
-			#for chunk in range(len(starts)):
-			#	for pos in range(starts[chunk], ends[chunk]):
-			#		out[chrom][bc,strand][umi][pos] = b""
-
-
 def pileup(pos, cigar, seq):
 	global out
 	pos_in = 0
-	#print()
-	#print("pileup",pos,cigar,seq)
 	cigar_ops = pattern.findall(cigar) 
 	if cigar_ops[0][1] == 'S':
 		pos_in += int(cigar_ops[0][0])
 		cigar_ops = cigar_ops[1:]
 	for length, op in cigar_ops:
-		#print(length,op)
 		length = int(length)
 		if op == 'M':
-			#coords[pos_in:(pos_in+length)] = range(pos, pos + length)
-			#out[chrom][bc,strand][umi][1] += bytes("".join([pos, "-", pos+length, ","]), encoding='utf-8')
-			#out[chrom][bc,strand][umi][2] += bytes("".join([seq[pos_in:pos_in+i], ","]), encoding='utf-8')
-			coord = [pos, pos+length-1]
+			coord = [pos, pos+length]
 			starts, ends = out[chrom][bc,strand][umi][0]
-			#print("M", coord,starts,ends)
 
 			for se_ind in range(len(starts)):
-				#print(se_ind)
-				#print(starts[se_ind], ends[se_ind], coord, seq)
-				if coord[1] < starts[se_ind]:
+				if (coord[1] < starts[se_ind]) or (coord[0] > ends[se_ind]):
 					continue
-				if coord[0] > ends[se_ind]:
-					continue #break
 
-				#print(starts[se_ind], ends[se_ind], coord, seq)
 				start_in = starts[se_ind] - coord[0]
 				if start_in < 0:
 					start = coord[0]
@@ -149,511 +75,196 @@ def pileup(pos, cigar, seq):
 					end_in += coord[1]-coord[0]+1 +pos_in
 					end = ends[se_ind] +1
 
-				#length_out = end - start
 				seq_out = seq[start_in:end_in]
-				#print(start,length_out, seq_out)
 				out[chrom][bc,strand][umi][1] += bytes("".join([str(start), ":", seq_out, ","]), encoding='utf-8') # "-", str(length), 
-				#pos_in += length
-
-			#out[chrom][bc,strand][umi][1] += bytes("".join([str(pos), ":", seq[pos_in:pos_in+length], ","]), encoding='utf-8') # "-", str(length), 
-			
-			#for i in range(length):
-			#	if pos+i in out[chrom][bc,strand][umi]:
-			#		#nt_ind = nt2int[seq[pos_in+i]]
-			#		#out[chrom][bc,strand][umi][pos+i][nt_ind] += 1
-			#		out[chrom][bc,strand][umi][pos+i] += bytes(seq[pos_in+i], encoding='utf-8') #= "".join([out[chrom][bc,strand][umi][pos+i], seq[pos_in+i]])
-			
+			#print("pileup", chrom, bc, umi, length, op, coord, starts, ends, out[chrom][bc,strand][umi][1])
 			pos_in += length
 		elif op == 'I':
 			pos_in += length
 			continue
 		pos += length
-		#print(out[chrom][bc,strand][umi][1])
 	out[chrom][bc,strand][umi][1] += b" "
-	#out[chrom][bc,strand][umi][2] += b" "
 
-def leave_only_max(d):
-	#print(d)
-	dmax=[0,0]
-	for i in range(5):
-		if d[i]>dmax[1]:
-			dmax=[i,d[i]]
-	#print(dmax)
-	return(dmax)
-
-def umi_consensus(bc_strand, chrom, umi): #, dup_min
-	global out
-	for pos in list(out[chrom][bc_strand][umi].keys()):
-		#print(chrom, bc_strand, umi, pos)
-		nt, cov = leave_only_max(out[chrom][bc_strand][umi][pos])
-		#if cov < dup_min or not nt:
-		#	del out[chrom][bc_strand][umi][pos]
-		#else:
-		#	out[chrom][bc_strand][umi][pos] = nt
-		if cov >= dup_min and nt:
-			if pos in out[chrom][bc_strand]:
-				out[chrom][bc_strand][pos][umi] = nt
-			else:
-				out[chrom][bc_strand][pos] = {umi: nt}
-		del out[chrom][bc_strand][umi][pos]
-
-	#if not out[chrom][bc_strand][umi]:
-	del out[chrom][bc_strand][umi]
-
-def variance(bc_strand, chrom): 
-	global out, len_cov
-	len_cov_chr = 0
-	len_cov_err_chr = 0
-	for pos in list(out[chrom][bc_strand].keys()):
-		if len(out[chrom][bc_strand][pos]) < cov_min:
-			del out[chrom][bc_strand][pos]
-			continue
-		len_cov_chr += 1
-		d = dict() 
-		for umi in list(out[chrom][bc_strand][pos].keys()):
-			if out[chrom][bc_strand][pos][umi] in d:
-				d[out[chrom][bc_strand][pos][umi]] += 1
-			else:
-				d[out[chrom][bc_strand][pos][umi]] = 1
-		variants = len(d)
-		if variants != vars_exp or min(d.values())>1:
-			del out[chrom][bc_strand][pos]
-			continue
-			# 1) remove those where mismatch is repeated more than once on the same position!
-			# so when more than one umi contains mismatch on the same position
-			# bc pol2 error hardly could happen twice at the same position
-			# meaning that mismatch probably happened due to some other reasons
-			# 2) remove if there are more than 2 variants per min position
-			# same reasoning
-		len_cov_err_chr += 1
-		out[chrom][bc_strand][pos] = sorted(d, key=d.get, reverse=True) #d
-		out[chrom][bc_strand][pos] = [int2nt[i] for i in out[chrom][bc_strand][pos]]
-		# mismatch from which to which nt
-		#[1] " AC" " TA"
-
-	#return(len_cov_chr, len_cov_err_chr)
-	_bc = bc_strand[0]
-	if _bc in len_cov:
-		len_cov[_bc][0] += len_cov_err_chr ; len_cov[_bc][1] += len_cov_chr
-	else:
-		len_cov[_bc] = [len_cov_err_chr, len_cov_chr]
-
-def record_substitutions(address, chrom):
-	with open(address, "a") as f:
-		for bc_strand in out[chrom]:
-			for pos in out[chrom][bc_strand]:
-				print(bc_strand[0][5:], bc_strand[1], chrom, pos, *out[chrom][bc_strand][pos], file = f)
-
-def record_errorrate(address): #er, 
-	with open(address, "w") as f:
-		for bc in len_cov:
-			if len_cov[bc][1]:
-				print(bc, len_cov[bc][0]/len_cov[bc][1], *len_cov[bc], file = f) #errorRate
-
+def umi2code_fnc(umi):
+	umi2 = ''.join([code2umi[(umi-max_chr_len)//1000000], 
+		code2umi[(umi-max_chr_len)%1000000//1000],
+		code2umi[(umi-max_chr_len)%1000]])
+	return umi2
 
 def across_chrom(chrom):
 	global out
-	#for chrom in out:
-	#print("chrom",chrom)
 	for bc_strand in out[chrom]:
-		#print("bc strand",bc_strand)
 		if bc_strand[0] not in cell_cov:
 			cell_cov[bc_strand[0]]=[0,0,0]
+
 		for umi in list(out[chrom][bc_strand].keys()):
-			#print("umi",umi)
-			#print(out[chrom][bc_strand][umi][1])
-			seqs = str(out[chrom][bc_strand][umi][1], encoding="utf-8")
-			#print("seqs", seqs)
-			seqs = [i.split(":") for i in seqs.split(",")][:-1]
-			seqs = [[int(i[0]),i[1]] for i in seqs]
-			interm_dict = dict()
-			#print("seqs2", seqs)
-			#print("seqs",seqs)
-			for s in seqs:
-				if s[0] not in interm_dict:
-					interm_dict[s[0]] = [s[1]]
-				else:
-					interm_dict[int(s[0])].append(s[1])
-					#for pos_in in range(len(s[1])):
-					#	if pos_in == len(interm_dict[s[0]]): # if current seq longer than prev
-					#		interm_dict[s[0]] = "".join([interm_dict[s[0]], s[1][pos_in:]])
-					#		break
-					#	if s[1][pos_in]==interm_dict[s[0]][pos_in]:
-					#		continue
-					#	else:
-			#interm_dict[103826667] = ["AGTG", "AGAGGT"]
-			#interm_dict[103826670] = ["GGTACTTGTGAGC"]
-			for i in interm_dict:
-				interm_dict[i].append(0)
-			#print("interm_dict",interm_dict)
-			while True:
-				start=min(interm_dict.keys()) # min - for umis, not duplicates, or better do it on the next step?
-				pos = start
-				#pos_in = 0
-				seqs = [interm_dict[pos]]
-				interm_dict.pop(pos)
-				#print(interm_dict)
+			dups = str(out[chrom][bc_strand][umi][1], encoding="utf-8").split(",")
+			dups = [dup.split(":") for dup in dups][:-1]
+			dups = [[int(dup[0]),dup[1]] for dup in dups]
+
+			dups_dict = dict()
+			for dup in dups:
+				pos, seq = dup
+				dups_dict[pos] = dups_dict.get(pos,[]) + [seq] #.append(seq)
+			for i in dups_dict:
+				dups_dict[i].append(0)
+			#print(chrom, bc_strand, umi, "dups", dups, "dups_dict", dups_dict)
+			# for each non-interrupted region consisting of multiple duplicates:
+			while True: 
+				#try:
+				#print( 'non-interrupted region', dups_dict )
+				start=min(dups_dict.keys()) # start of uninterrupted region
+				#except:
+				#	break
 				ref = ""
-				#print("pos seqs",pos, seqs)
-				here = [ i[k[-1]] for k in seqs for i in k[:-1]]
-				#if pos==5801941:
-				if print_var and pos==print_var[1]:
-					#print(umi, pos, here)
-					print(''.join([
-						code2umi[(umi-max_chr_len)//1000000], 
-						code2umi[(umi-max_chr_len)%1000000//1000], 
-						code2umi[(umi-max_chr_len)%1000]]), 
-					pos, ''.join([''.join(s) for s in [(str(here.count(i)),i) for i in set(here)]]))					
+				seqs = list()
+				pos = start -1
 
-
-
-				if len(set(here)) == 1:
-					ref += here[0]
-				else:
-					b = {}
-					for item in here:
-						b[item] = b.get(item, 0) + 1
-					#print(b)
-					#if max(b.values()) >= dup_min:	
-					ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
-				#print(ref)
-
-				for seq in seqs:
-					seq[-1]+=1
+				# while the region is uninterrupted, for each next position
 				while True:
 					pos += 1
-					if pos in interm_dict:
-						seqs.append(interm_dict[pos])
-						interm_dict.pop(pos)
-					#print(interm_dict)
-					here = [i[k[-1]] for k in seqs for i in k[:-1] if len(i)>k[-1]]
-					#print(here, set(here))
-					#if pos==5801941:
+					if pos in dups_dict:
+						seqs.append(dups_dict.pop(pos))
+
+					nts_at_pos = [i[k[-1]] for k in seqs for i in k[:-1] if len(i)>k[-1]]
+					nt_types_at_pos = set(nts_at_pos)
 					if print_var and pos==print_var[1]:
-						print(''.join([
-							code2umi[(umi-max_chr_len)//1000000], 
-							code2umi[(umi-max_chr_len)%1000000//1000], 
-							code2umi[(umi-max_chr_len)%1000]]), 
-						pos, 
-						''.join([''.join(s) for s in [(str(here.count(i)),i) for i in set(here)]]))					
-					if not here:
+						print(umi2code_fnc(umi), pos, 
+							''.join([''.join(s) for s in [(str(nts_at_pos.count(i)),i) for i in nt_types_at_pos]]))				
+					if not nts_at_pos:
 						break
-					if len(set(here)) == 1:
-						ref += here[0]
+					if len(nt_types_at_pos) == 1:
+						ref += nts_at_pos[0]
 					else:
-						b = {}
-						for item in here:
-							b[item] = b.get(item, 0) + 1
-						#print(max(b.values()))
-						#if max(b.values()) >= dup_min:	
+						b = {nt_type:nts_at_pos.count(nt_type) for nt_type in nt_types_at_pos}
 						ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
-					#print(ref)
 					for seq in seqs:
 						seq[-1]+=1
-					#print(seqs)
-				#print(ref)
-				# out[chrom][bc_strand][start] = out[chrom][bc_strand].get(start,[]).append(ref)
-				if start not in out[chrom][bc_strand]:
-					out[chrom][bc_strand][start] = [ref]
-					#if start==103826666:
-					#	out[chrom][bc_strand][start].append('TAGTGG(4T1A)ACTTGTG')
-					#	out[chrom][bc_strand][start].append('TAGTGG(4T1A)ACTTGTG')
-					#	out[chrom][bc_strand][103826670]=['GGTACTTGT'] #GAGCCAT
-				else:
-					out[chrom][bc_strand][start].append(ref)
-				#print("end ID", interm_dict)
-				if not interm_dict:
+
+				out[chrom][bc_strand][start] = out[chrom][bc_strand].get(start,[]) + [ref] #.append(ref)
+				if not dups_dict:
 					del out[chrom][bc_strand][umi]
 					break
-		#print(out)
 
 		# first compare if the strings are the same on the length of minlen and befor next start
-
 		#g = iter(sorted(out[chrom][bc_strand].keys()))
 		#start= next(g) #min(out[chrom][bc_strand])
+
 		for start in sorted(out[chrom][bc_strand].keys()):
 			if start not in out[chrom][bc_strand]:
 				continue
-			pos = start
-
-			seqs = [out[chrom][bc_strand][pos]]
-			seqs[-1].append(0)
-			#print("seqs2",seqs)
-			out[chrom][bc_strand].pop(pos)
+			pos = start-1
+			seqs=[]
 			ref = ""
-			#here = [ i[k[-1]] for k in seqs for i in k[:-1]]
-			here = list()
-			for k in seqs: 
-				for i in range(len(k[:-1])): 
-					if len(k[i])>k[-1]:
-						if k[i][k[-1]]!="(":
-							here.append(k[i][k[-1]])
-						else:
-							nt=k[i][k[-1]:].split(")")[0]+")"
-							here.append(nt)
-							k[i]=k[i][len(nt)-1:]
-				k[-1] += 1
-			#print(here)
-			s_here = set(here)
-			if len(s_here) == 1:
-				#ref = ''.join([ref, str(len(here)),here[0]])
-				cell_cov[bc_strand[0]][0] += len(here)
-				cell_cov[bc_strand[0]][1] += 1
-				#print(here)
-			else:
-				b = {}
-				for item in here:
-					b[item] = b.get(item, 0) + 1
-				#ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
-				pcr_ers=list()
-				for pair in list(b.items()):
-					#print(pair)
-					if pair[0].startswith("("):
-						#print("here")
-						pcr_ers.append(''.join([str(pair[1]),pair[0]]))
-						pcr_vars = pattern_pcr_vars.findall(pair[0])
-						pcr_vars = [(int(i[0]), i[1]) for i in pcr_vars]
-						#print("pcr_vars",pcr_vars)
-						maxx = (0,'')
-						for pcr_var in pcr_vars:
-							if pcr_var[0]>maxx[0]:
-								maxx = pcr_var
-						#print("b maxx", b, maxx)
-						if maxx[0] > dup_min and ((2*maxx[0]-sum([i[0] for i in pcr_vars]))>=(maxx[0]/2)):
-							b[maxx[1]] = b.get(maxx[1],0) + 1 #int(maxx[0])
-						del b[pair[0]]
-				#if len(b)==1:
-				#	ref=''.join([ref,*[str(v)+k for k,v in b.items()] ])
-				#else:
-				#	ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
 
-				if b and max(b.values())>=cov_min:
-					cell_cov[bc_strand[0]][0] += sum(b.values())
-					cell_cov[bc_strand[0]][1] += 1
-					#print("h",b)
-					#print(bc_strand[0][5:], bc_strand[1], chrom, pos, *[str(v)+k for k,v in b.items()])
-					if (len(b)==2 and min(b.values())==1) or (print_var and pos==print_var[1] and chrom==print_var[0]):
-						print(bc_strand[0][5:], chrom, bc_strand[1], pos, *[k for k,v in sorted(b.items(), key=lambda item: item[1])], ''.join([str(v)+k for k,v in b.items()]), ''.join(pcr_ers)) # ref.rstrip("(")[:-1]
-						cell_cov[bc_strand[0]][2]+=1
-			#print(ref)
-			#break
-			#for seq in seqs:
-			#	seq[-1]+=1
 			while True:
 				pos += 1
 				if pos in out[chrom][bc_strand]:
 					seqs.append(out[chrom][bc_strand][pos])
-					seqs[-1].append(0)
+					seqs[-1].append(0) # append counter
 					out[chrom][bc_strand].pop(pos)
-				#print(seqs)
-				#print(out[chrom][bc_strand])
-				here = list()
-				for k in seqs: 
-					for i in range(len(k[:-1])): 
-						if len(k[i])>k[-1]:
-							if k[i][k[-1]]!="(":
-								here.append(k[i][k[-1]])
-							else:
-								nt=k[i][k[-1]:].split(")")[0]+")"
-								here.append(nt)
-								k[i]=k[i][len(nt)-1:]
+				nts_at_pos = list()
+				for seqs_with_same_start in seqs: 
+					pos_in = seqs_with_same_start[-1]
+					for seq_nr in range(len(seqs_with_same_start[:-1])): 
+						seq = seqs_with_same_start[seq_nr]
+						if pos_in >= len(seq):
+							continue # here the seq could also be dropped from seqs
+						nt = seq[pos_in]
+						if seq[pos_in]=="(":
+							nt=seq[pos_in:].split(")")[0]+")"
+							seqs_with_same_start[seq_nr]=seq[len(nt)-1:]
+						nts_at_pos.append(nt)
 
-					k[-1] += 1
-				#print(seqs)
-				#here = [i[k[-1]] if i[k[-1]]!="(" else i[1+k[-1]:].split(")")[0] ]
-				#print(here)
-				#print(seqs)
-				#break
-				#print(here, s_here)
-				#break
-				if not here:
+					seqs_with_same_start[-1] += 1 # pos_in+1 for those seqs with same start pos
+				if not nts_at_pos:
 					break
-				if len(here)<cov_min:
-					print(chrom,bc_strand,pos)
-					exit()
+				if len(nts_at_pos)<cov_min:
 					continue
-				#print(here)
-				s_here = set(here)
-				if len(s_here) == 1:
-					#ref = ''.join([ref, str(len(here)),here[0]])
-					cell_cov[bc_strand[0]][0] += len(here)
+				nt_types_at_pos = set(nts_at_pos)
+				if len(nt_types_at_pos) == 1:
+					#ref = ''.join([ref, str(len(nts_at_pos)),nts_at_pos[0]])
+					cell_cov[bc_strand[0]][0] += len(nts_at_pos)
 					cell_cov[bc_strand[0]][1] += 1
-					#print(here)
 				else:
-					#if any([i.startswith("(") for i in s_here ]):
-					#	print("!!!") 
-					#	break
-					#	print(here.index("("))
-					#	#while True:
-					#	#	nr_seqs = 
-					#	break
-					b = {}
-					for item in here:
-						b[item] = b.get(item, 0) + 1
-					#print(b)
+					b = {nt_type:nts_at_pos.count(nt_type) for nt_type in nt_types_at_pos}
 					#ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
 					pcr_ers=list()
-					for pair in list(b.items()):
-						#print(pair)
-						if pair[0].startswith("("):
-							#print("here")
-							pcr_ers.append(''.join([str(pair[1]),pair[0]]))
-							pcr_vars = pattern_pcr_vars.findall(pair[0])
-							pcr_vars = [(int(i[0]), i[1]) for i in pcr_vars]
-							#print("pcr_vars",pcr_vars)
-							maxx = (0,'')
-							for pcr_var in pcr_vars:
-								if pcr_var[0]>maxx[0]:
-									maxx = pcr_var
-							#print("b maxx", b, maxx)
-							if maxx[0] >= dup_min and ((2*maxx[0]-sum([i[0] for i in pcr_vars]))>=(maxx[0]/2)):
-								b[maxx[1]] = b.get(maxx[1],0) + 1 #int(maxx[0])
-							del b[pair[0]]
+					for nt, cnt in list(b.items()):
+						if not nt.startswith("("):
+							continue
+						pcr_vars = pattern_pcr_vars.findall(nt)
+						pcr_vars = [(int(i[0]), i[1]) for i in pcr_vars]
+						maxx = (0,'')
+						for pcr_var in pcr_vars:
+							if pcr_var[0]>maxx[0]:
+								maxx = pcr_var
+						if maxx[0] >= dup_min and ((2*maxx[0]-sum([i[0] for i in pcr_vars]))>=(maxx[0]/2)):
+							b[maxx[1]] = b.get(maxx[1],0) + 1 #int(maxx[0])
+							pcr_ers.append(''.join([str(cnt),nt]))
+						del b[nt]
 					#if len(b)==1:
 					#	ref=''.join([ref,*[str(v)+k for k,v in b.items()] ])
 					#else:
 					#	ref=''.join([ref,"(",*[str(v)+k for k,v in b.items()], ")" ])
-					#cell_cov[bc_strand]=cell_cov.get(bc_strand,0) + sum(b.values())
 					
-					if b and max(b.values())>=cov_min:
-						cell_cov[bc_strand[0]][0] += sum(b.values())
-						cell_cov[bc_strand[0]][1] += 1
-						#print(b)
-						if (len(b)==2 and min(b.values())==1) or (print_var and pos==print_var[1] and chrom==print_var[0]):
+					if b and max(b.values())>=cov_min-1:
+						#cell_cov[bc_strand[0]][0] += sum(b.values())
+						#cell_cov[bc_strand[0]][1] += 1
+						if (len(b)==2 and min(b.values())==1): # or (print_var and pos==print_var[1] and chrom==print_var[0])
 							print(bc_strand[0][5:], chrom, bc_strand[1], pos, *[k for k,v in sorted(b.items(), key=lambda item: item[1], reverse=True)], ''.join([str(v)+k for k,v in b.items()]), ''.join(pcr_ers)) # ref.rstrip("(")[:-1]
+							cell_cov[bc_strand[0]][0] += sum(b.values())
+							cell_cov[bc_strand[0]][1] += 1
 							cell_cov[bc_strand[0]][2]+=1
-				#print(ref)
-				#for seq in seqs:
-				#	seq[-1]+=1
-				#print(seqs)
-			#break
 			#out[chrom][bc_strand][start] = ref
-			#print(chrom, bc_strand, start, ref)
-		#print(out)
 
-
-chrom_old=''
 pattern = re.compile(r'(\d+)([MIDNS])') 
 pattern_pcr_vars = re.compile(r'(\d+)([ACTG])') 
-nt2int = {"N":0, "A":1,"C":2,"T":3,"G":4}
-int2nt = {v: k for k, v in nt2int.items()}
-cell_cov=dict()
-len_cov = dict() 
 
+max_chr_len = 195154279
 l='ACGT'
-umi2code_d = dict(zip([''.join([a,b,c,d])
-    for a in l for b in l for c in l for d in l],
-    range(256)))
-ind = iter(range(257, 257+16))
-for a in l:
-	for b in l:
-		umi2code_d[''.join([a,b])] = next(ind)
+umi2code_d = dict(zip([''.join([a,b,c,d]) for a in l for b in l for c in l for d in l], range(256)))
+umi2code_d.update(dict(zip([''.join([a,b]) for a in l for b in l], range(257, 257+16)))) #6)))) #
 code2umi = {v: k for k, v in umi2code_d.items()}
 
+out = dict()
+cell_cov=dict()
+chrom_old=''
 
 for line in sys.stdin:
-	line = line.strip().split() #"\t"
-	#if line[2]!="chr1" or line[-2]!="CB:Z:ACACAGTAGAGAGGGC" :
-	#	continue
-
-
-	# if reading from reads.txt
-	#bc, chr_str, umi, start, cigar, seq, _ = line
-	#chrom, strand = chr_str.split('_')
-	#seq = list(seq)
-	#start = int(start)
-	#strand = int(strand)
-	#start_cigar = '_'.join([start, cigar])
-	#if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
-	#	print(umi)
-	#	continue
-	#if False: # if reading from reads.txt
+	line = line.strip().split() 
 	if line[-2]=="CB:Z:-" or line[-1]=="UB:Z:-" or line[4]!="255" or line[2]=="chrM" or int(line[1])>=256:
 		continue
-	#if not line[-2]=="CB:Z:ACTGATGCATGGAATA":
-	#	continue
 	chrom = line[2]
-	#if chrom!="chr1":
-	#	exit()
-	#if chrom not in chroms:
-	#	continue
-	#chrom = chroms[chrom]
 	bc = line[-2] ; umi= line[-1] ; strand = int(line[1][0])
 	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] + max_chr_len # max size of chr in mice, so it would not intersect with pos after umi_consensus in out
-
+	#if umi == 414217407:
+	#	print("+1")
 	if chrom != chrom_old:
 		if chrom_old and chrom_old in out:
-			#print('here', len(out[chrom_old]))
 			across_chrom(chrom_old)
-			#for bc_strand in out[chrom_old]:
-			#	#x = out[chrom_old][bc_strand] # would be the same dict, no
-			#	for _umi in list(out[chrom_old][bc_strand].keys()):
-			#		umi_consensus(bc_strand, chrom_old, _umi) # _bc _chr _umi
-			#	variance(bc_strand, chrom_old)
-			#record_substitutions(address_subs, chrom_old)
 			del out[chrom_old]
 		chrom_old = chrom
-		#for bc_strand in out[chrom]:
-		#	for _umi in out[chrom][bc_strand]:
-		unpack_startsends(chrom) #, bc_strand, _umi)
-		#exit()
-
-	#if isinstance(out[chrom][bc,strand][umi], tuple):
-	#	unpack_startsends(bc,chrom,strand,umi)
+		unpack_startsends(chrom) 
+		#print("unpacked", out[chrom_old][('TGTTCCGAGCCTGACC',1)][414217407])
 
 	if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
+		#if umi == 414217407:
+		#	print("not in out")
 		continue
-	#print(umi)
 
 	start = int(line[3]); cigar = line[5]
-	seq = line[9] # list(line[9]) # [nt2int[i] for i in list(line[9])] 
-	# but is it better? strings from different lists are probably 
-	# the same objects, meaning that "A" from all its positions 
-	# in all seqs would take total 64 bytes
+	seq = line[9]
 
 	pileup(start, cigar, seq)
-
-#print(out)
+	#if umi == 414217407:
+	#	print(out[chrom][(bc,strand)][umi])
 
 with open(address_er, "w") as f:
 	for bc in cell_cov:
+		if not cell_cov[bc][1]:
+			continue
 		print(bc[5:], 
 			round(cell_cov[bc][2]/cell_cov[bc][1], 8), 
 			*cell_cov[bc][::-1],
 			file=f)
-
-exit()
-
-for bc_strand in out["chr7"]:
-	print(bc_strand)
-	for umi in out["chr7"][bc_strand]:
-		print(umi)
-		print(out["chr7"][bc_strand][umi][0])
-		print(str(out["chr7"][bc_strand][umi][1], encoding='utf-8'))
-
-exit()	
-
-if chrom in out:
-	for bc_strand in out[chrom]:
-		for _umi in list(out[chrom][bc_strand].keys()):
-			umi_consensus(bc_strand, chrom, _umi) # _bc _chr _umi
-		variance(bc_strand, chrom) 
-
-	record_substitutions(address_subs, chrom)
-
-record_errorrate(address_er)
-exit()
-
-
-
-# AGGCCACAGGTGCTAG 0 1 TGCGATGTTAAG                                        
-# {28277446: [0, 0, 0, 0, 0], 28277447: [0, 0, 0, 0, 0], 
-# 28277448: [0, 0, 0, 0, 0], 28277449: [0, 0, 0, 0, 0], 
-# 28277450: [0, 0, 0, 0, 0], 28277451: [0, 0, 0, 0, 0], 
-# 28277452: [0, 0, 0, 0, 0], 28277453: [0, 0, 0, 0, 0]}
-# 28277345        91M2S
-# 28277361        93M
-# 28277422        63M1D30M
-# 28277431        93M
-# 28277432        93M
-# 28277507        93M
