@@ -17,12 +17,19 @@ def unpack_startsends(chrom):
 	global out
 	with open(cov_file) as f:
 		chrom_check = chrom + " "
+		#print(chrom_check)
 		for line in f: 
 			if chrom_check not in line:
 				continue
+			#print(line)
 			line = line.strip()
 			info, starts, ends = line.split("[")
+			#print(info)
 			bc, umi, chrom, strand = info.split()
+			#print(bc)
+			#print(umi)
+			#print(chrom)
+			#print(strand)
 			if not bc.startswith("CB"):
 				bc = ''.join(["CB:Z:",bc])
 			strand = int(strand[0])
@@ -42,7 +49,11 @@ def unpack_startsends(chrom):
 			else:
 				out[chrom][bc,strand][umi] = [(starts, ends), b""] #(starts, ends)
 
+			#print(out)
+			#exit()
+
 def pileup(pos, cigar, seq):
+	#print(pos, cigar, seq)
 	global out
 	pos_in = 0
 	cigar_ops = pattern.findall(cigar) 
@@ -84,6 +95,8 @@ def pileup(pos, cigar, seq):
 			continue
 		pos += length
 	out[chrom][bc,strand][umi][1] += b" "
+	#print(out[chrom][bc,strand][umi])
+	#print()
 
 def umi2code_fnc(umi):
 	umi2 = ''.join([code2umi[(umi-max_chr_len)//1000000], 
@@ -101,6 +114,11 @@ def across_chrom(chrom):
 			dups = str(out[chrom][bc_strand][umi][1], encoding="utf-8").split(",")
 			dups = [dup.split(":") for dup in dups][:-1]
 			dups = [[int(dup[0]),dup[1]] for dup in dups]
+			#print(umi)
+			#print(out[chrom][bc_strand][umi])
+			#print("dups")
+			#print(dups)
+			#print()
 
 			dups_dict = dict()
 			for dup in dups:
@@ -225,6 +243,12 @@ max_chr_len = 195154279
 l='ACGT'
 umi2code_d = dict(zip([''.join([a,b,c,d]) for a in l for b in l for c in l for d in l], range(256)))
 umi2code_d.update(dict(zip([''.join([a,b]) for a in l for b in l], range(257, 257+16)))) #6)))) #
+#umi2code_d = dict(zip([''.join([a,b,c,d]) for a in l for b in l for c in l for d in l], range(256)))
+#ind = iter(range(16))
+#for a in l:
+#	for b in l:
+#		umi2code_d[''.join([a,b])] = next(ind)
+
 code2umi = {v: k for k, v in umi2code_d.items()}
 
 out = dict()
@@ -238,9 +262,11 @@ for line in sys.stdin:
 	chrom = line[2]
 	bc = line[-2] ; umi= line[-1] ; strand = int(line[1][0])
 	umi = umi2code_d[umi[5:9]]*1000000 + umi2code_d[umi[9:13]]*1000 + umi2code_d[umi[13:17]] + max_chr_len # max size of chr in mice, so it would not intersect with pos after umi_consensus in out
-	#if umi == 414217407:
+	#if umi == 235377290:
 	#	print("+1")
 	if chrom != chrom_old:
+		#print(chrom, chrom_old)
+		#print()
 		if chrom_old and chrom_old in out:
 			across_chrom(chrom_old)
 			del out[chrom_old]
@@ -249,14 +275,17 @@ for line in sys.stdin:
 		#print("unpacked", out[chrom_old][('TGTTCCGAGCCTGACC',1)][414217407])
 
 	if (chrom not in out) or ((bc,strand) not in out[chrom]) or (umi not in out[chrom][bc,strand]):
-		#if umi == 414217407:
+		#if umi == 235377290:
 		#	print("not in out")
 		continue
 
 	start = int(line[3]); cigar = line[5]
 	seq = line[9]
 
+	#print(out[chrom][bc,strand][umi])
 	pileup(start, cigar, seq)
+	#print(out[chrom][bc,strand][umi])
+	#print("-------")
 	#if umi == 414217407:
 	#	print(out[chrom][(bc,strand)][umi])
 

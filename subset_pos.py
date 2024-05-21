@@ -181,13 +181,16 @@ def good2bcumis(bc, umi, value):
 
 chrom_old=''
 l='ACGT'
-umi2code_d = dict(zip([''.join([a,b,c,d])
-    for a in l for b in l for c in l for d in l],
-    range(256)))
-ind = iter(range(16))
-for a in l:
-	for b in l:
-		umi2code_d[''.join([a,b])] = next(ind)
+#umi2code_d = dict(zip([''.join([a,b,c,d])
+#    for a in l for b in l for c in l for d in l],
+#    range(256)))
+#ind = iter(range(16))
+#for a in l:
+#	for b in l:
+#		umi2code_d[''.join([a,b])] = next(ind)
+umi2code_d = dict(zip([''.join([a,b,c,d]) for a in l for b in l for c in l for d in l], range(256)))
+umi2code_d.update(dict(zip([''.join([a,b]) for a in l for b in l], range(257, 257+16)))) #6)))) #
+
 
 for line in sys.stdin:
 	line = line.strip().split() 

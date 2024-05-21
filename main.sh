@@ -17,20 +17,24 @@
 # where pos is position of the parameter in the command, 
 # e.g. ./main.sh <stage> => stage=$1
 
-stage=1
+# stage=1
 
 # you can uncomment following variable assignments 
 # and variations of other commands linking to them
 # in order to automatize assignment for some variables below:
 
-#stage=$1
-# dataset=$2
-# sample=$3
+stage="$3"
+dataset="$1"
+sample="$2"
+th_dup=5
+th_cov=5
+mm_allowed=2
+
 
 workdir='/cellfile/datapublic/acherdi1/rnaspeed/'
 gitdir="$workdir/RNAP_error_counter/"
-out="GSE232273/res/SRR24507709/"
-# out="${dataset}/res/${sample}/"
+# out="GSE232273/res/SRR24507709/"
+out="${dataset}/res/${sample}/"
 
 ### params for stage 1
 
@@ -64,7 +68,7 @@ then
 	umi_len=12
 	umi_params="--soloCBwhitelist $CBWL --soloBarcodeReadLength $umiread_len --soloUMIlen $umi_len"
 
-else if (( $cellranger == 2 ))
+elif (( $cellranger == 2 ))
 then
 	# path to the barcode whitelist 
 	# (V2: https://teichlab.github.io/scg_lib_structs/data/737K-august-2016.txt.gz )
@@ -74,12 +78,12 @@ then
 	umi_len=10
 	umi_params="--soloCBwhitelist $CBWL --soloBarcodeReadLength $umiread_len --soloUMIlen $umi_len"
 
-else if (( $cellranger == 0 ))
+elif (( $cellranger == 0 ))
 then
 	umi_params="--soloBarcodeReadLength 150 --soloCBstart 1 --soloCBlen 12 --soloUMIstart 13 --soloUMIlen 8"
 fi
 
-threads=16
+threads=12
 
 # if you want to add any extra parameters to STAR, then specify them here:
 star_params=""
@@ -105,10 +109,10 @@ bam="${out}/Aligned.sortedByCoord.out.bam"
 bc_filtd="${out}/Solo.out/GeneFull/filtered/barcodes.tsv"
 
 # min amount of duplicates of the same UMI read per position (to account for PCR errors)
-th_dup_s=5
+th_dup_s=$th_dup
 
 # min amount of UMI reads per position (to exclude allele differences)
-th_cov_s=5
+th_cov_s=$th_cov
 
 
 ### params for stage 3
@@ -125,14 +129,14 @@ bam="${out}/Aligned.sortedByCoord.out.bam"
 pos_filtd="${out}/covd_${th_dup}${th_cov}.txt"
 
 # min amount of duplicates of the same UMI read per position (to account for PCR errors)
-th_dup_e=5
+th_dup_e=$th_dup
 
 # min amount of UMI reads per position (to exclude allele differences)
-th_cov_e=5
+th_cov_e=$th_cov
 
 # allowed amount of mismatches between UMI reads at the position 
 # to consider it as transcription error:
-mm_allowed=1
+mm_allowed=$mm_allowed
 # still, some part could be due to allele differences,
 # although most of the samples are done on homozygous organisms.
 # also, some positions could be more prone to transcription errors than other,
@@ -141,7 +145,8 @@ mm_allowed=1
 
 # output paths
 subs_out="${out}/subs_${th_dup}${th_cov}.txt" 
-er_out="${out}/er_${th_dup}${th_cov}.txt"
+#er_out="${out}/er_${th_dup}${th_cov}.txt"
+er_out="${out}/er.v3.2.txt"
 
 ### params for stage 4
 subs_out="${out}/subs_${th_dup}${th_cov}.txt"
@@ -225,8 +230,8 @@ then
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Calculating RNA Pol 2 error rate:"
 	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/er.v1.py \
-	$th_dup_e $th_cov_e $mm_allowed $pos_filtd $subs_out $er_out
+	/usr/bin/time -v python3 $gitdir/er.v3.py \
+	$th_dup_e $th_cov_e $mm_allowed $pos_filtd $er_out > $subs_out #$er_out
 	date +"%a %d.%b %T"| tr '\n' ' ' 
 	echo "Error rate is calculated."
 fi
@@ -236,16 +241,16 @@ then
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Introducing gene information:"
 
-	date +"%a %d.%b %T" | tr '\n' ' ' 
-	echo "Editing subs.txt (adding strand info) "
+	#date +"%a %d.%b %T" | tr '\n' ' ' 
+	#echo "Editing subs.txt (adding strand info) "
 	# rewrite er.v2.py and exclude this first chunk
-	cat $subs_out | 
-	awk 'BEGIN{s[0]="+";s[1]="-"} {print $1, $3, s[$2], $4, $5, $6}' > $out/subs3_${th_dup}${th_cov}.txt
+	#cat $subs_out | 
+	#awk 'BEGIN{s[0]="+";s[1]="-"} {print $1, $3, s[$2], $4, $5, $6}' > $out/subs3_${th_dup}${th_cov}.txt
 	# sed 's/ 1 / - /g' | sed 's/ 0 / + /g'  > $out/subs3.txt
 
 	date +"%a %d.%b %T" | tr '\n' ' ' 
-	echo "Adding gene info to subs3.txt "
-	python3 $gitdir/subs2gene.py $out/subs3_${th_dup}${th_cov}.txt $gene_info \
+	echo "Adding gene info to subs.txt "
+	python3 $gitdir/subs2gene.py $out/subs_${th_dup}${th_cov}.txt $gene_info \
 	> $out/subs_${th_dup}${th_cov}.wg.txt
 
 	date +"%a %d.%b %T" | tr '\n' ' ' 
@@ -264,6 +269,7 @@ then
 	echo "sort "
 	cat $out/gene_cov_${th_dup}${th_cov}.txt | sort -rnk 5 > $out/gene_cov_${th_dup}${th_cov}.sorted.txt
 fi
+
 echo
 echo "DONE!"
 date
