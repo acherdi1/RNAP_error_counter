@@ -1,0 +1,2 @@
+microdict @ git+https://github.com/touqir14/Microdict
+numpy==1.24.3
