@@ -43,20 +43,21 @@ out="${dataset}/res/${sample}/"
 # source /data/public/apapada1/Conda/anaconda/bin/activate star
 
 # path to STAR reference (folder)
-genome="/data/public/apapada1/Felix_scRNAseq/starconda" 
+genome="/cellfile/datapublic/apapada1/Felix_scRNAseq/starconda" 
 
 # path to the reads from transcripts (if multiple lanes, input all separated by comma):
 # please, rewrite it according to the path to the sample of interest:
-fastq_read="GSE232273/src/SRR24507709_L1_2.fastq.gz,GSE232273/src/SRR24507709_L2_2.fastq.gz"
+fastq_read="$4" #"GSE232273/src/SRR24507709_L1_2.fastq.gz,GSE232273/src/SRR24507709_L2_2.fastq.gz"
 #fastq_read="${dataset}/src/${sample}_2.fastq.gz"
 
 # path to the reads from BC+UMIs:
-fastq_umi="GSE232273/src/SRR24507709_L2_1.fastq.gz,GSE232273/src/SRR24507709_L2_1.fastq.gz"
+fastq_umi="$5" #"GSE232273/src/SRR24507709_L2_1.fastq.gz,GSE232273/src/SRR24507709_L2_1.fastq.gz"
 # fastq_umi="${dataset}/src/${sample}_1.fastq.gz"
 
 # CellRanger v3, or v2, or custom set-up(0)? (different whitelists for cell barcodes, different UMI lengths)
 # https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium3.html
-cellranger=2
+cellranger="$6" #2
+umiread_len="$7"
 
 if (( $cellranger == 3 ))
 then 
@@ -64,7 +65,7 @@ then
 	# (V3: https://teichlab.github.io/scg_lib_structs/data/3M-february-2018.txt.gz )
 	CBWL="$workdir/CBwhitelist.CRv3.3M-february-2018.txt" 
 	# length of BC+UMI reads
-	umiread_len=150 
+	#umiread_len=150 
 	umi_len=12
 	umi_params="--soloCBwhitelist $CBWL --soloBarcodeReadLength $umiread_len --soloUMIlen $umi_len"
 
@@ -72,9 +73,9 @@ elif (( $cellranger == 2 ))
 then
 	# path to the barcode whitelist 
 	# (V2: https://teichlab.github.io/scg_lib_structs/data/737K-august-2016.txt.gz )
-	CBWL="$workdir/CBwhitelist.CRv2.737K-august-2016.txt"
+	CBWL="$workdir/CBWL.CRv2.737K-august-2016.txt"
 	# length of BC+UMI reads
-	umiread_len=150 
+	#umiread_len=150 
 	umi_len=10
 	umi_params="--soloCBwhitelist $CBWL --soloBarcodeReadLength $umiread_len --soloUMIlen $umi_len"
 
@@ -83,7 +84,7 @@ then
 	umi_params="--soloBarcodeReadLength 150 --soloCBstart 1 --soloCBlen 12 --soloUMIstart 13 --soloUMIlen 8"
 fi
 
-threads=12
+threads="$8" #12
 
 # if you want to add any extra parameters to STAR, then specify them here:
 star_params=""
@@ -144,12 +145,13 @@ mm_allowed=$mm_allowed
 # and these positions would be excluded.
 
 # output paths
-subs_out="${out}/subs_${th_dup}${th_cov}.txt" 
+#subs_out="${out}/subs_${th_dup}${th_cov}.txt" 
+subs_out="${out}/subs.v4.txt" 
 #er_out="${out}/er_${th_dup}${th_cov}.txt"
-er_out="${out}/er.v3.2.txt"
+er_out="${out}/er.v4.txt"
 
 ### params for stage 4
-subs_out="${out}/subs_${th_dup}${th_cov}.txt"
+#subs_out="${out}/subs_${th_dup}${th_cov}.txt"
 
 # path to gene info
 gene_info="${workdir}/genes.gex_mm10_2020_A"
@@ -178,6 +180,27 @@ out=$out
 cd $workdir
 mkdir -p $out
 
+if (( $stage < 1 ))
+then 
+	srr_str="$4"
+	IFS=',' read -r -a srrs <<< "$srr_str"
+	src_dir="${dataset}/src/"
+	fastq_read=$(for srr in "${srrs[@]}"; do echo -ne ${src_dir}${srr}"_2.fastq.gz,"; done; echo)
+	fastq_umi=$(for srr in "${srrs[@]}"; do echo -ne ${src_dir}${srr}"_1.fastq.gz,"; done; echo)
+	echo """Downloading datasets:
+	srrs=$srr_str
+	"""
+	
+	date
+	cd $src_dir
+	for srr in "${srrs[@]}"; do 
+		/usr/bin/time -v fastq-dump --gzip --split-files $srr
+	done
+	cd $workdir
+	date
+	echo "Downloading finished."
+
+fi 
 if (( $stage < 2 ))
 then 
 	echo "Running STAR:"
@@ -230,11 +253,16 @@ then
 	date +"%a %d.%b %T" | tr '\n' ' ' 
 	echo "Calculating RNA Pol 2 error rate:"
 	samtools view $bam |
-	/usr/bin/time -v python3 $gitdir/er.v3.py \
+	/usr/bin/time -v python3 $gitdir/er.v4.py \
 	$th_dup_e $th_cov_e $mm_allowed $pos_filtd $er_out > $subs_out #$er_out
 	date +"%a %d.%b %T"| tr '\n' ' ' 
 	echo "Error rate is calculated."
 fi
+
+echo
+echo "DONE!"
+date
+exit
 
 if (( $stage < 5 ))
 then 
